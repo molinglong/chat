@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Save, Trash2, Loader2, CheckCircle, AlertCircle, Key, Eye, EyeOff, ChevronDown, Zap } from 'lucide-react'
+import { Save, Trash2, Loader2, CheckCircle, AlertCircle, Key, Eye, EyeOff, ChevronDown, Zap, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatStore } from '@/store/chat-store'
 
@@ -18,20 +18,20 @@ interface KeyInfo {
   updatedAt: string
 }
 
-const PROVIDER_META: Record<string, { color: string; dot: string; url: string }> = {
-  openai: { color: 'text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500', url: 'https://platform.openai.com/api-keys' },
-  anthropic: { color: 'text-orange-600 dark:text-orange-400', dot: 'bg-orange-500', url: 'https://console.anthropic.com' },
-  deepseek: { color: 'text-blue-600 dark:text-blue-400', dot: 'bg-blue-500', url: 'https://platform.deepseek.com' },
-  qianwen: { color: 'text-purple-600 dark:text-purple-400', dot: 'bg-purple-500', url: 'https://dashscope.aliyun.com' },
-  wenxin: { color: 'text-red-600 dark:text-red-400', dot: 'bg-red-500', url: 'https://cloud.baidu.com/product/qianfan' },
-  google: { color: 'text-sky-600 dark:text-sky-400', dot: 'bg-sky-500', url: 'https://aistudio.google.com/apikey' },
-  mistral: { color: 'text-amber-600 dark:text-amber-400', dot: 'bg-amber-500', url: 'https://console.mistral.ai/api-keys' },
-  xai: { color: 'text-slate-600 dark:text-slate-400', dot: 'bg-slate-600', url: 'https://console.x.ai/' },
-  groq: { color: 'text-violet-600 dark:text-violet-400', dot: 'bg-violet-500', url: 'https://console.groq.com/keys' },
-  moonshot: { color: 'text-indigo-600 dark:text-indigo-400', dot: 'bg-indigo-500', url: 'https://platform.moonshot.cn/console/api-keys' },
-  zhipu: { color: 'text-cyan-600 dark:text-cyan-400', dot: 'bg-cyan-500', url: 'https://open.bigmodel.cn/console/apikey/index' },
-  doubao: { color: 'text-teal-600 dark:text-teal-400', dot: 'bg-teal-500', url: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey' },
-  yi: { color: 'text-fuchsia-600 dark:text-fuchsia-400', dot: 'bg-fuchsia-500', url: 'https://platform.lingyiwanwu.com/apikeys' },
+const PROVIDER_URL: Record<string, string> = {
+  openai: 'https://platform.openai.com/api-keys',
+  anthropic: 'https://console.anthropic.com',
+  deepseek: 'https://platform.deepseek.com',
+  qianwen: 'https://dashscope.aliyun.com',
+  wenxin: 'https://cloud.baidu.com/product/qianfan',
+  google: 'https://aistudio.google.com/apikey',
+  mistral: 'https://console.mistral.ai/api-keys',
+  xai: 'https://console.x.ai/',
+  groq: 'https://console.groq.com/keys',
+  moonshot: 'https://platform.moonshot.cn/console/api-keys',
+  zhipu: 'https://open.bigmodel.cn/console/apikey/index',
+  doubao: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey',
+  yi: 'https://platform.lingyiwanwu.com/apikeys',
 }
 
 export function SettingsModal() {
@@ -150,105 +150,58 @@ export function SettingsModal() {
 
   if (!settingsOpen) return null
 
-  const configuredProviders = providers.filter((p) => getKeyForProvider(p.id))
-  const unconfiguredProviders = providers.filter((p) => !getKeyForProvider(p.id))
-
   const renderProviderCard = (provider: ProviderInfo) => {
     const existingKey = getKeyForProvider(provider.id)
     const draft = draftKeys[provider.id] ?? ''
     const isSaving = saving[provider.id] ?? false
     const isTesting = testing[provider.id] ?? false
     const result = testResult[provider.id]
-    const meta = PROVIDER_META[provider.id]
     const isPasswordVisible = showPassword[provider.id] ?? false
+    const url = PROVIDER_URL[provider.id]
 
     return (
       <div
         key={provider.id}
         className={cn(
-          'rounded-xl border p-3 space-y-2.5 transition-all',
+          'rounded-xl border px-3.5 py-3 space-y-2.5 transition-colors',
           'border-zinc-200/60 dark:border-zinc-800/60',
           'bg-white/60 dark:bg-zinc-900/40',
-          'hover:border-zinc-300 dark:hover:border-zinc-700'
+          existingKey && 'bg-zinc-50/80 dark:bg-zinc-900/60'
         )}
       >
-        {/* Provider header */}
-        <div className="flex items-center gap-2">
-          <div className={cn('w-2 h-2 rounded-full shrink-0', meta?.dot ?? 'bg-zinc-500')} />
-          <h3 className={cn('font-semibold text-sm flex-1 min-w-0 truncate', meta?.color ?? 'text-zinc-900 dark:text-white')}>
+        {/* Header: dot + name + status badge */}
+        <div className="flex items-center gap-2.5">
+          <div className={cn(
+            'w-2 h-2 rounded-full shrink-0',
+            existingKey ? 'bg-green-500' : 'bg-zinc-300 dark:bg-zinc-600'
+          )} />
+          <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200 flex-1 truncate">
             {provider.name}
-          </h3>
-          {/* Model tags */}
-          <div className="flex flex-wrap gap-1 justify-end">
-            {provider.models.map((model) => (
-              <span
-                key={model}
-                className="text-[10px] px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 font-mono"
-              >
-                {model}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Current key display */}
-        {existingKey && (
-          <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200/60 dark:border-zinc-800/60">
-            <Key className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-            <span className="text-xs font-mono text-zinc-600 dark:text-zinc-300 flex-1 truncate">
-              {existingKey.maskedKey}
+          </span>
+          {existingKey ? (
+            <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-medium shrink-0">
+              已配置
             </span>
-          </div>
-        )}
-
-        {/* Input with password toggle */}
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <input
-              type={isPasswordVisible ? 'text' : 'password'}
-              value={draft}
-              onChange={(e) => setDraftKeys((d) => ({ ...d, [provider.id]: e.target.value }))}
-              placeholder={existingKey ? '输入新 Key 替换...' : '输入 API Key...'}
-              className={cn(
-                'w-full rounded-lg border px-2.5 py-1.5 pr-8 text-xs',
-                'border-zinc-200/60 dark:border-zinc-700',
-                'bg-white/80 dark:bg-zinc-800/80',
-                'text-zinc-900 dark:text-zinc-100',
-                'placeholder:text-zinc-400 dark:placeholder:text-zinc-500',
-                'focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10 focus:border-zinc-400 dark:focus:border-zinc-600'
-              )}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((s) => ({ ...s, [provider.id]: !s[provider.id] }))}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
-              tabIndex={-1}
-            >
-              {isPasswordVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-            </button>
-          </div>
-          <button
-            onClick={() => handleSave(provider.id)}
-            disabled={!draft.trim() || isSaving}
-            className={cn(
-              'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 shrink-0',
-              draft.trim() && !isSaving
-                ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200'
-                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed'
-            )}
-          >
-            {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-            保存
-          </button>
+          ) : (
+            <span className="text-[11px] text-zinc-400 dark:text-zinc-500 shrink-0">
+              {provider.models.length} 个模型
+            </span>
+          )}
         </div>
 
-        {/* Actions for configured providers */}
+        {/* Saved key display + actions */}
         {existingKey && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-zinc-100/80 dark:bg-zinc-800/80 border border-zinc-200/40 dark:border-zinc-700/40">
+              <Key className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+              <code className="text-xs text-zinc-600 dark:text-zinc-300 truncate">
+                {existingKey.maskedKey}
+              </code>
+            </div>
             <button
               onClick={() => handleTest(provider.id)}
               disabled={isTesting}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shrink-0"
             >
               {isTesting ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -259,22 +212,71 @@ export function SettingsModal() {
               ) : (
                 <Zap className="w-3.5 h-3.5" />
               )}
-              测试
+              <span className="hidden sm:inline">测试</span>
             </button>
-            {result && (
-              <span className={cn('text-xs', result === 'success' ? 'text-green-500' : 'text-red-500')}>
-                {result === 'success' ? '成功' : '失败'}
-              </span>
-            )}
-            <div className="flex-1" />
             <button
               onClick={() => handleDelete(provider.id)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs text-red-500/80 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 transition-colors"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500/70 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors shrink-0"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              删除
+              <span className="hidden sm:inline">删除</span>
             </button>
           </div>
+        )}
+
+        {/* Input row */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <input
+              type={isPasswordVisible ? 'text' : 'password'}
+              value={draft}
+              onChange={(e) => setDraftKeys((d) => ({ ...d, [provider.id]: e.target.value }))}
+              placeholder={existingKey ? '输入新 Key 替换...' : '粘贴 API Key...'}
+              className={cn(
+                'w-full rounded-lg border px-2.5 py-1.5 pr-8 text-xs',
+                'border-zinc-200/60 dark:border-zinc-700/60',
+                'bg-white dark:bg-zinc-800/60',
+                'text-zinc-900 dark:text-zinc-100',
+                'placeholder:text-zinc-400 dark:placeholder:text-zinc-500',
+                'focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10',
+                'focus:border-zinc-400 dark:focus:border-zinc-600'
+              )}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((s) => ({ ...s, [provider.id]: !s[provider.id] }))}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+              tabIndex={-1}
+            >
+              {isPasswordVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+          <button
+            onClick={() => handleSave(provider.id)}
+            disabled={!draft.trim() || isSaving}
+            className={cn(
+              'px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 shrink-0',
+              draft.trim() && !isSaving
+                ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-[0.97]'
+                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed'
+            )}
+          >
+            {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            保存
+          </button>
+        </div>
+
+        {/* Get key link */}
+        {url && !existingKey && (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+          >
+            <ExternalLink className="w-3 h-3" />
+            获取 Key
+          </a>
         )}
       </div>
     )
@@ -288,29 +290,28 @@ export function SettingsModal() {
         onClick={() => setSettingsOpen(false)}
       />
 
-      {/* Modal card - glassmorphism */}
-      <div className="relative w-full max-w-2xl max-h-[80vh] flex flex-col rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl shadow-2xl">
-        {/* Modal header */}
-        <div className="relative px-4 pt-3 pb-3 border-b border-zinc-200/60 dark:border-zinc-800/60 shrink-0">
+      {/* Modal card */}
+      <div className="relative w-full max-w-lg max-h-[85vh] flex flex-col rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl shadow-2xl">
+        {/* Header with macOS red dot */}
+        <div className="relative flex items-center px-4 pt-3 pb-2.5 border-b border-zinc-200/60 dark:border-zinc-800/60 shrink-0">
           <button
             onClick={() => setSettingsOpen(false)}
-            className="absolute top-3 left-4 w-3.5 h-3.5 rounded-full bg-red-500 hover:bg-red-600 transition-colors group flex items-center justify-center"
+            className="w-3 h-3 rounded-full bg-red-500 hover:bg-red-600 transition-colors group flex items-center justify-center shrink-0 mr-3"
             aria-label="关闭"
           >
-            <svg className="w-2 h-2 text-red-950 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor">
+            <svg className="w-1.5 h-1.5 text-red-950 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          <div className="text-center">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">设置</h2>
-          </div>
+          <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">设置</h2>
+          <kbd className="ml-auto text-[10px] text-zinc-400 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 font-mono">ESC</kbd>
         </div>
 
-        {/* Modal body */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4">
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-6 h-6 animate-spin text-zinc-400" />
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-5 h-5 animate-spin text-zinc-400" />
             </div>
           ) : (
             <>
@@ -318,7 +319,7 @@ export function SettingsModal() {
               {message && (
                 <div
                   className={cn(
-                    'mb-4 px-3 py-2 rounded-lg text-xs flex items-center gap-2',
+                    'mb-3 px-3 py-2 rounded-lg text-xs flex items-center gap-2',
                     message.type === 'success'
                       ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200/60 dark:border-green-800/60'
                       : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200/60 dark:border-red-800/60'
@@ -333,36 +334,15 @@ export function SettingsModal() {
                 </div>
               )}
 
-              {/* Configured section */}
-              {configuredProviders.length > 0 && (
-                <div className="mb-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">已配置</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500">{configuredProviders.length}</span>
-                  </div>
-                  <div className="space-y-2">
-                    {configuredProviders.map(renderProviderCard)}
-                  </div>
-                </div>
-              )}
+              {/* Provider cards */}
+              <div className="space-y-2">
+                {providers.map(renderProviderCard)}
+              </div>
 
-              {/* Unconfigured section */}
-              {unconfiguredProviders.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">待配置</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500">{unconfiguredProviders.length}</span>
-                  </div>
-                  <div className="space-y-2">
-                    {unconfiguredProviders.map(renderProviderCard)}
-                  </div>
-                </div>
-              )}
-
-              {/* Collapsible help */}
+              {/* Help section */}
               <button
                 onClick={() => setHelpExpanded(!helpExpanded)}
-                className="flex items-center gap-1.5 mt-4 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+                className="flex items-center gap-1.5 mt-4 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
               >
                 <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', helpExpanded && 'rotate-180')} />
                 如何获取 API Key？
@@ -371,14 +351,13 @@ export function SettingsModal() {
                 <div className="mt-2 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60">
                   <ul className="text-[11px] space-y-1.5">
                     {providers.map((provider) => {
-                      const meta = PROVIDER_META[provider.id]
-                      if (!meta) return null
+                      const url = PROVIDER_URL[provider.id]
+                      if (!url) return null
                       return (
                         <li key={provider.id} className="flex items-center gap-2">
-                          <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', meta.dot)} />
-                          <span className="text-zinc-600 dark:text-zinc-400 shrink-0">{provider.name}:</span>
-                          <a href={meta.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline break-all">
-                            {meta.url.replace('https://', '')}
+                          <span className="text-zinc-500 dark:text-zinc-400 shrink-0 min-w-[5rem]">{provider.name}</span>
+                          <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline truncate">
+                            {url.replace('https://', '')}
                           </a>
                         </li>
                       )
@@ -388,12 +367,6 @@ export function SettingsModal() {
               )}
             </>
           )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-4 py-2 border-t border-zinc-200/60 dark:border-zinc-800/60 shrink-0 flex items-center justify-between">
-          <span className="text-[10px] text-zinc-400">共 {providers.length} 个服务商</span>
-          <kbd className="text-[10px] text-zinc-400 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 font-mono">ESC</kbd>
         </div>
       </div>
     </div>
