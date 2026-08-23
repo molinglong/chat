@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useEffect } from 'react'
-import { MessageSquare } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { MessageBubble } from './MessageBubble'
 import type { UIMessage } from 'ai'
 
@@ -9,9 +9,11 @@ interface MessageListProps {
   messages: UIMessage[]
   isStreaming: boolean
   className?: string
+  onRegenerate?: () => void
+  onEditMessage?: (messageId: string, newText: string) => void
 }
 
-export function MessageList({ messages, isStreaming, className }: MessageListProps) {
+export function MessageList({ messages, isStreaming, className, onRegenerate, onEditMessage }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -32,33 +34,40 @@ export function MessageList({ messages, isStreaming, className }: MessageListPro
   if (messages.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full px-4">
-        <div className="max-w-md w-full text-center space-y-6">
-          <div className="flex justify-center">
-            <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-              <MessageSquare className="w-8 h-8 text-gray-400 dark:text-gray-500" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-              开始新对话
-            </h2>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">
-              选择一个模型，输入你的问题，开始与 AI 对话。
-            </p>
-          </div>
+        <div className="max-w-2xl text-center space-y-1.5">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+            开始新对话
+          </h2>
+          <p className="text-zinc-500 dark:text-zinc-400 text-sm">
+            选择模型，输入问题，开始对话。
+          </p>
         </div>
       </div>
     )
   }
 
+  // Find the last assistant message index (computed once)
+  let lastAssistantIndex = -1
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'assistant') {
+      lastAssistantIndex = i
+      break
+    }
+  }
+
   return (
-    <div ref={containerRef} className={className}>
-      <div className="max-w-3xl mx-auto">
-        {messages.map((message) => (
+    <div ref={containerRef} className={cn('w-full min-h-full overflow-x-hidden', className)}>
+      <div className="max-w-2xl mx-auto overflow-x-hidden">
+        {messages.map((message, index) => (
           <MessageBubble
             key={message.id}
             message={message}
             isStreaming={isStreaming}
+            isLastAssistant={index === lastAssistantIndex}
+            canRegenerate={!isStreaming && !!onRegenerate}
+            onRegenerate={onRegenerate}
+            canEdit={!isStreaming && !!onEditMessage}
+            onEdit={onEditMessage}
           />
         ))}
         <div ref={bottomRef} />

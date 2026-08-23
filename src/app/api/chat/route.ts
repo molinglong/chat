@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server"
-import { streamText, type CoreMessage } from "ai"
+import { streamText, type ModelMessage } from "ai"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { decrypt } from "@/lib/crypto"
@@ -14,20 +14,20 @@ interface ChatRequestBody {
 }
 
 /**
- * Convert incoming UIMessage format (from @ai-sdk/react useChat) to CoreMessage format
- * that streamText expects. UIMessages use `parts` array; CoreMessages use `content`.
+ * Convert incoming UIMessage format (from @ai-sdk/react useChat) to ModelMessage format
+ * that streamText expects. UIMessages use `parts` array; ModelMessages use `content`.
  */
-function convertToCoreMessages(messages: any[]): CoreMessage[] {
+function convertToModelMessages(messages: any[]): ModelMessage[] {
   return messages
     .filter((m) => m.role === "user" || m.role === "assistant" || m.role === "system")
     .map((m) => {
       // If message already has string content, use it directly
       if (typeof m.content === "string" && m.content) {
-        return { role: m.role, content: m.content } as CoreMessage
+        return { role: m.role, content: m.content } as ModelMessage
       }
       // If content is a valid array of content parts, use it
       if (Array.isArray(m.content) && m.content.length > 0) {
-        return { role: m.role, content: m.content } as CoreMessage
+        return { role: m.role, content: m.content } as ModelMessage
       }
       // AI SDK v7 UIMessage format: extract text from `parts`
       if (Array.isArray(m.parts)) {
@@ -36,11 +36,11 @@ function convertToCoreMessages(messages: any[]): CoreMessage[] {
           .map((p: any) => p.text)
           .join("")
         if (textParts) {
-          return { role: m.role, content: textParts } as CoreMessage
+          return { role: m.role, content: textParts } as ModelMessage
         }
       }
       // Fallback: use content or empty string
-      return { role: m.role, content: String(m.content ?? m.text ?? "") } as CoreMessage
+      return { role: m.role, content: String(m.content ?? m.text ?? "") } as ModelMessage
     })
     .filter((m) => m.content !== "")
 }
@@ -98,8 +98,8 @@ export async function POST(req: NextRequest) {
   const apiKey = decrypt(apiKeyRecord.encryptedKey)
   const provider = createProviderInstance(modelId, apiKey)
 
-  // Convert incoming messages to CoreMessage format for streamText
-  const messages = convertToCoreMessages(rawMessages)
+  // Convert incoming messages to ModelMessage format for streamText
+  const messages = convertToModelMessages(rawMessages)
 
   // Extract text from the last user message for persistence
   const lastRawUserMsg = [...rawMessages].reverse().find((m) => m.role === "user")
@@ -136,26 +136,40 @@ export async function POST(req: NextRequest) {
     model: provider(modelId),
     messages,
     onFinish: async ({ text }) => {
-      // Persist assistant response
-      await prisma.message.create({
-        data: {
-          conversationId: convId!,
-          role: "assistant",
-          content: text,
-        },
-      })
-      // Update conversation: timestamp + auto-generate title on first message
-      const titleUpdate = isNewConversation
-        ? { title: userContent.slice(0, 30) || "新对话" }
-        : {}
-      await prisma.conversation.update({
-        where: { id: convId! },
-        data: { updatedAt: new Date(), ...titleUpdate },
-      })
+      // Ensure content is always a non-null string (Prisma schema requires String, not String?)
+      const content = text ?? ""
+      try {
+        // Persist assistant response
+        await prisma.message.create({
+          data: {
+            conversationId: convId!,
+            role: "assistant",
+            content,
+          },
+        })
+        // Update conversation: timestamp + auto-generate title on first message
+        const titleUpdate = isNewConversation
+          ? { title: userContent.slice(0, 30) || "新对话" }
+          : {}
+        await prisma.conversation.update({
+          where: { id: convId! },
+          data: { updatedAt: new Date(), ...titleUpdate },
+        })
+      } catch (error) {
+        // AI SDK's notify() silently swallows errors from onFinish callbacks,
+        // so we must catch and log them ourselves to avoid silent data loss.
+        console.error("[chat] Failed to persist assistant message:", error)
+      }
     },
   })
 
+  const responseHeaders: Record<string, string> = { "X-Conversation-Id": convId }
+  if (isNewConversation) {
+    const title = userContent.slice(0, 30) || "新对话"
+    responseHeaders["X-Conversation-Title"] = encodeURIComponent(title)
+  }
+
   return result.toUIMessageStreamResponse({
-    headers: { "X-Conversation-Id": convId },
+    headers: responseHeaders,
   })
 }

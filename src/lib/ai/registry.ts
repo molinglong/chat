@@ -4,14 +4,32 @@ import { anthropicProvider } from "./providers/anthropic"
 import { deepseekProvider } from "./providers/deepseek"
 import { qianwenProvider } from "./providers/qianwen"
 import { wenxinProvider } from "./providers/wenxin"
+import { googleProvider } from "./providers/google"
+import { moonshotProvider } from "./providers/moonshot"
+import { zhipuProvider } from "./providers/zhipu"
+import { mistralProvider } from "./providers/mistral"
+import { xaiProvider } from "./providers/xai"
+import { doubaoProvider } from "./providers/doubao"
+import { yiProvider } from "./providers/yi"
+import { groqProvider } from "./providers/groq"
 
 // All registered providers
 export const providers: Record<string, ProviderDefinition> = {
+  // 国际主流
   openai: openaiProvider,
   anthropic: anthropicProvider,
+  google: googleProvider,
+  mistral: mistralProvider,
+  xai: xaiProvider,
+  groq: groqProvider,
+  // 国内主流
   deepseek: deepseekProvider,
   qianwen: qianwenProvider,
   wenxin: wenxinProvider,
+  moonshot: moonshotProvider,
+  zhipu: zhipuProvider,
+  doubao: doubaoProvider,
+  yi: yiProvider,
 }
 
 // Get all available models across all providers

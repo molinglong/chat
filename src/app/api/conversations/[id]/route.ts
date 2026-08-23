@@ -4,7 +4,8 @@ import { prisma } from '@/lib/db'
 import { z } from 'zod'
 
 const patchSchema = z.object({
-  title: z.string().min(1).max(200),
+  title: z.string().min(1).max(200).optional(),
+  model: z.string().min(1).optional(),
 })
 
 export async function PATCH(
@@ -37,8 +38,11 @@ export async function PATCH(
 
   const updated = await prisma.conversation.update({
     where: { id },
-    data: { title: parsed.data.title },
-    select: { id: true, title: true, updatedAt: true },
+    data: {
+      title: parsed.data.title,
+      model: parsed.data.model,
+    },
+    select: { id: true, title: true, model: true, updatedAt: true },
   })
 
   return NextResponse.json(updated)

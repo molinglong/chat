@@ -16,7 +16,7 @@ export async function middleware(req: NextRequest) {
   if (isPublic) {
     // Redirect logged-in users away from auth pages
     if (isLoggedIn && (pathname.startsWith("/login") || pathname.startsWith("/register"))) {
-      return NextResponse.redirect(new URL("/", req.url))
+      return NextResponse.redirect(new URL("/chat", req.url))
     }
     return NextResponse.next()
   }

@@ -7,6 +7,7 @@ export default function NewChatPage() {
 
   return (
     <ChatPanel
+      key="new-chat"
       initialMessages={[]}
       initialModel={defaultModel}
       allModels={allModels}

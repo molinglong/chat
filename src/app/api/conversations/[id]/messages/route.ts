@@ -54,3 +54,61 @@ export async function GET(
     nextCursor,
   })
 }
+
+/**
+ * Delete a message and all messages after it in the conversation.
+ * Used when a user edits a message — the old message and its
+ * subsequent responses are removed before the new message is sent.
+ *
+ * Query: ?messageId=<id>
+ */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await auth()
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const { id } = params
+  const { searchParams } = new URL(req.url)
+  const messageId = searchParams.get("messageId")
+
+  if (!messageId) {
+    return NextResponse.json(
+      { error: "messageId query parameter is required" },
+      { status: 400 }
+    )
+  }
+
+  // Verify the conversation belongs to the user
+  const conversation = await prisma.conversation.findFirst({
+    where: { id, userId: session.user.id },
+    select: { id: true },
+  })
+
+  if (!conversation) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
+  // Find the target message to get its createdAt timestamp
+  const targetMessage = await prisma.message.findFirst({
+    where: { id: messageId, conversationId: id },
+    select: { createdAt: true },
+  })
+
+  if (!targetMessage) {
+    return NextResponse.json({ error: "Message not found" }, { status: 404 })
+  }
+
+  // Delete the target message and all messages after it
+  await prisma.message.deleteMany({
+    where: {
+      conversationId: id,
+      createdAt: { gte: targetMessage.createdAt },
+    },
+  })
+
+  return NextResponse.json({ success: true })
+}

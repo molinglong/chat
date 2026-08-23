@@ -65,20 +65,36 @@ export async function POST(req: NextRequest) {
 
   const encryptedKey = encrypt(apiKey)
 
-  const record = await prisma.apiKey.upsert({
-    where: {
-      userId_provider: {
+  // Verify the user record still exists in DB (session may be stale if DB was reset)
+  const user = await prisma.user.findUnique({ where: { id: session.user.id } })
+  if (!user) {
+    console.error("[keys] User not found in DB for session userId:", session.user.id)
+    return NextResponse.json(
+      { error: "会话已过期，请退出登录后重新登录" },
+      { status: 401 }
+    )
+  }
+
+  // Use findFirst + update/create instead of upsert to avoid libSQL FK issues
+  const existing = await prisma.apiKey.findFirst({
+    where: { userId: session.user.id, provider },
+  })
+
+  let record
+  if (existing) {
+    record = await prisma.apiKey.update({
+      where: { id: existing.id },
+      data: { encryptedKey },
+    })
+  } else {
+    record = await prisma.apiKey.create({
+      data: {
         userId: session.user.id,
         provider,
+        encryptedKey,
       },
-    },
-    update: { encryptedKey },
-    create: {
-      userId: session.user.id,
-      provider,
-      encryptedKey,
-    },
-  })
+    })
+  }
 
   return NextResponse.json({ id: record.id, provider: record.provider })
 }

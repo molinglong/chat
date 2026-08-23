@@ -55,7 +55,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       <div
         className={cn(
           'p-2 rounded-lg transition-colors',
-          'text-gray-400 hover:text-white hover:bg-gray-700/50',
+          'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-800',
           className
         )}
       >
@@ -69,8 +69,8 @@ export function ThemeToggle({ className }: { className?: string }) {
       onClick={toggleTheme}
       className={cn(
         'p-2 rounded-lg transition-colors',
-        'text-gray-400 hover:text-white hover:bg-gray-700/50',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50',
+        'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-800',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/50',
         className
       )}
       aria-label={theme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}

@@ -29,7 +29,7 @@ const components: Components = {
       <code
         className={cn(
           'px-1.5 py-0.5 rounded text-sm font-mono',
-          'bg-gray-100 dark:bg-gray-800 text-pink-600 dark:text-pink-400',
+          'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300',
           className
         )}
         {...props}
@@ -48,7 +48,7 @@ const components: Components = {
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-blue-600 dark:text-blue-400 hover:underline"
+        className="text-zinc-900 dark:text-zinc-100 underline underline-offset-2 hover:text-zinc-600 dark:hover:text-zinc-400 break-all"
         {...props}
       >
         {children}
@@ -59,7 +59,7 @@ const components: Components = {
     return (
       <div className="overflow-x-auto my-3">
         <table
-          className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 border border-gray-200 dark:border-gray-700 rounded"
+          className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded"
           {...props}
         >
           {children}
@@ -70,7 +70,7 @@ const components: Components = {
   th({ children, ...props }) {
     return (
       <th
-        className="px-3 py-2 bg-gray-50 dark:bg-gray-800 text-left text-sm font-semibold text-gray-900 dark:text-gray-100"
+        className="px-3 py-2 bg-zinc-50 dark:bg-zinc-800 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-100"
         {...props}
       >
         {children}
@@ -80,7 +80,7 @@ const components: Components = {
   td({ children, ...props }) {
     return (
       <td
-        className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300 border-t border-gray-200 dark:border-gray-700"
+        className="px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 border-t border-zinc-200 dark:border-zinc-800"
         {...props}
       >
         {children}
@@ -103,7 +103,7 @@ const components: Components = {
   },
   p({ children, ...props }) {
     return (
-      <p className="my-2 leading-relaxed" {...props}>
+      <p className="my-2 leading-relaxed break-words" {...props}>
         {children}
       </p>
     )
@@ -120,7 +120,7 @@ const components: Components = {
   blockquote({ children, ...props }) {
     return (
       <blockquote
-        className="border-l-4 border-gray-300 dark:border-gray-600 pl-4 my-3 text-gray-600 dark:text-gray-400 italic"
+        className="border-l-4 border-zinc-300 dark:border-zinc-700 pl-4 my-3 text-zinc-600 dark:text-zinc-400 italic"
         {...props}
       >
         {children}
@@ -128,7 +128,7 @@ const components: Components = {
     )
   },
   hr(props) {
-    return <hr className="my-4 border-gray-200 dark:border-gray-700" {...props} />
+    return <hr className="my-4 border-zinc-200 dark:border-zinc-800" {...props} />
   },
 }
 
@@ -137,7 +137,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
   className,
 }: MarkdownRendererProps) {
   return (
-    <div className={cn('prose-sm max-w-none text-gray-800 dark:text-gray-200', className)}>
+    <div className={cn('prose-sm max-w-none break-words overflow-hidden text-zinc-800 dark:text-zinc-200', className)}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {content}
       </ReactMarkdown>

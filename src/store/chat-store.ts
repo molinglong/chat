@@ -6,6 +6,10 @@ interface ChatState {
   setSidebarOpen: (open: boolean) => void
   currentConversationId: string | null
   setCurrentConversationId: (id: string | null) => void
+  conversationTitle: string | null
+  setConversationTitle: (title: string | null) => void
+  settingsOpen: boolean
+  setSettingsOpen: (open: boolean) => void
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -14,4 +18,8 @@ export const useChatStore = create<ChatState>((set) => ({
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   currentConversationId: null,
   setCurrentConversationId: (id) => set({ currentConversationId: id }),
+  conversationTitle: null,
+  setConversationTitle: (title) => set({ conversationTitle: title }),
+  settingsOpen: false,
+  setSettingsOpen: (open) => set({ settingsOpen: open }),
 }))

@@ -23,13 +23,13 @@ export function CodeBlock({ language, code, className }: CodeBlockProps) {
   return (
     <div className={cn('relative group rounded-lg overflow-hidden my-3', className)}>
       {/* Header bar */}
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-800 dark:bg-gray-800 border-b border-gray-700/50">
-        <span className="text-xs text-gray-400 font-mono select-none">
+      <div className="flex items-center justify-between px-4 py-2 bg-zinc-800 dark:bg-zinc-800 border-b border-zinc-700/50">
+        <span className="text-xs text-zinc-400 font-mono select-none">
           {language || 'code'}
         </span>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-200 transition-colors"
+          className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
           aria-label="复制代码"
         >
           {copied ? (
@@ -46,8 +46,8 @@ export function CodeBlock({ language, code, className }: CodeBlockProps) {
         </button>
       </div>
       {/* Code content */}
-      <pre className="p-4 overflow-x-auto bg-gray-900 dark:bg-gray-950 text-sm leading-relaxed">
-        <code className="text-gray-200 font-mono">{code}</code>
+      <pre className="p-4 overflow-x-auto bg-zinc-900 dark:bg-zinc-950 text-sm leading-relaxed">
+        <code className="text-zinc-200 font-mono">{code}</code>
       </pre>
     </div>
   )

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import type { UIMessage } from 'ai'
@@ -8,12 +8,15 @@ import { AlertCircle, RefreshCw, Settings as SettingsIcon } from 'lucide-react'
 import Link from 'next/link'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
-import { ModelSelector } from './ModelSelector'
+import { useChatStore } from '@/store/chat-store'
 import type { ModelDefinition } from '@/lib/ai/types'
 import type { Attachment } from './FileUpload'
 
+const MODEL_STORAGE_KEY = 'chat:selectedModel'
+
 interface ChatPanelProps {
   conversationId?: string
+  conversationTitle?: string
   initialMessages: UIMessage[]
   initialModel: string
   allModels: ModelDefinition[]
@@ -45,7 +48,10 @@ function getErrorMessage(error: Error): { message: string; type: 'api_key' | 'ra
     return { message: '网络连接失败，请检查网络后重试', type: 'network' }
   }
 
-  return { message: '发生错误，请重试', type: 'general' }
+  // Fallback: show the real error from the provider so users can see the cause
+  // (e.g. quota exhausted, invalid model, auth failure, etc.)
+  const cleaned = msg.replace(/^AI_APICallError:\s*/i, '').trim()
+  return { message: cleaned || '发生错误，请重试', type: 'general' }
 }
 
 export function ChatPanel({
@@ -53,11 +59,30 @@ export function ChatPanel({
   initialMessages,
   initialModel,
   allModels,
+  conversationTitle,
 }: ChatPanelProps) {
   const [currentModel, setCurrentModel] = useState(initialModel)
   const [conversationId, setConversationId] = useState(initialConversationId)
+
+  // On mount, for new chats, load the last selected model from localStorage
+  useEffect(() => {
+    if (!initialConversationId) {
+      const saved = localStorage.getItem(MODEL_STORAGE_KEY)
+      if (saved && allModels.some((m) => m.id === saved)) {
+        setCurrentModel(saved)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const conversationIdRef = useRef(initialConversationId)
   const attachmentsRef = useRef<Attachment[] | undefined>(undefined)
+  const { setCurrentConversationId, setConversationTitle } = useChatStore()
+
+  // Notify store of current conversation (triggers Sidebar to refresh conversation list)
+  useEffect(() => {
+    setCurrentConversationId(initialConversationId ?? null)
+    setConversationTitle(conversationTitle ?? null)
+  }, [initialConversationId, conversationTitle, setCurrentConversationId, setConversationTitle])
 
   // Keep ref in sync
   conversationIdRef.current = conversationId
@@ -77,17 +102,22 @@ export function ChatPanel({
     fetch: async (url, options) => {
       const response = await fetch(url, options)
       const newConvId = response.headers.get('X-Conversation-Id')
+      const newConvTitle = response.headers.get('X-Conversation-Title')
       if (newConvId && newConvId !== conversationIdRef.current) {
         conversationIdRef.current = newConvId
         setConversationId(newConvId)
+        setCurrentConversationId(newConvId) // Notify Sidebar to refresh
+        if (newConvTitle) {
+          setConversationTitle(decodeURIComponent(newConvTitle))
+        }
         // Update URL without full navigation
-        window.history.replaceState(null, '', `/c/${newConvId}`)
+        window.history.replaceState(null, '', `/chat/c/${newConvId}`)
       }
       return response
     },
   })
 
-  const { messages, sendMessage, stop, status, error, clearError, regenerate } = useChat<UIMessage>({
+  const { messages, sendMessage, setMessages, stop, status, error, clearError, regenerate } = useChat<UIMessage>({
     transport,
     messages: initialMessages,
   })
@@ -110,6 +140,17 @@ export function ChatPanel({
 
   const handleModelChange = useCallback((modelId: string) => {
     setCurrentModel(modelId)
+    // Persist to localStorage for new chats to pick up
+    localStorage.setItem(MODEL_STORAGE_KEY, modelId)
+    // Persist to DB for existing conversations
+    const convId = conversationIdRef.current
+    if (convId) {
+      fetch(`/api/conversations/${convId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: modelId }),
+      }).catch((err) => console.error('Failed to persist model:', err))
+    }
   }, [])
 
   const handleRetry = useCallback(() => {
@@ -117,29 +158,53 @@ export function ChatPanel({
     regenerate()
   }, [clearError, regenerate])
 
+  const handleRegenerate = useCallback(() => {
+    clearError()
+    regenerate()
+  }, [clearError, regenerate])
+
+  const handleEditMessage = useCallback(
+    async (messageId: string, newText: string) => {
+      // Delete the old message and all subsequent messages from the DB
+      const convId = conversationIdRef.current
+      if (convId) {
+        try {
+          await fetch(
+            `/api/conversations/${convId}/messages?messageId=${messageId}`,
+            { method: 'DELETE' }
+          )
+        } catch (err) {
+          console.error('Failed to delete old messages:', err)
+        }
+      }
+
+      // Truncate local messages to before the edited message
+      const editIndex = messages.findIndex((m) => m.id === messageId)
+      if (editIndex === -1) return
+      const truncated = messages.slice(0, editIndex)
+      setMessages(truncated)
+
+      // Send the edited text as a new message
+      sendMessage({ text: newText })
+    },
+    [messages, setMessages, sendMessage]
+  )
+
   const errorInfo = error ? getErrorMessage(error) : null
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Model selector bar */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 dark:border-gray-800 shrink-0">
-        <ModelSelector
-          models={allModels}
-          selectedModel={currentModel}
-          onModelChange={handleModelChange}
-        />
-      </div>
+    <div className="flex flex-col h-full relative overflow-hidden">
 
       {/* Error banner */}
       {error && errorInfo && (
-        <div className="mx-4 mt-3 mb-0 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex items-start gap-3">
+        <div className="mx-4 mt-3 mb-0 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-red-500 dark:text-red-400 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-red-700 dark:text-red-400 font-medium">
+            <p className="text-sm text-red-600 dark:text-red-400 font-medium">
               {errorInfo.message}
             </p>
             {process.env.NODE_ENV === 'development' && error.message && (
-              <p className="mt-1 text-xs text-red-500/70 dark:text-red-400/60 font-mono truncate">
+              <p className="mt-1 text-xs text-red-400/70 dark:text-red-400/60 font-mono truncate">
                 {error.message}
               </p>
             )}
@@ -147,20 +212,20 @@ export function ChatPanel({
               <button
                 onClick={handleRetry}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                  bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400
-                  hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors
-                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
+                  bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900
+                  hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/50"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 重试
               </button>
               {errorInfo.type === 'api_key' && (
                 <Link
-                  href="/settings"
+                  href="/chat/settings"
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                    bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400
-                    hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors
-                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+                    bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300
+                    hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/50"
                 >
                   <SettingsIcon className="w-3.5 h-3.5" />
                   前往设置
@@ -181,11 +246,13 @@ export function ChatPanel({
       )}
 
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <MessageList
           messages={messages}
           isStreaming={isLoading}
-          className="h-full"
+          className="min-h-full"
+          onRegenerate={handleRegenerate}
+          onEditMessage={handleEditMessage}
         />
       </div>
 
@@ -194,6 +261,9 @@ export function ChatPanel({
         onSend={handleSend}
         onStop={handleStop}
         isLoading={isLoading}
+        models={allModels}
+        selectedModel={currentModel}
+        onModelChange={handleModelChange}
       />
     </div>
   )

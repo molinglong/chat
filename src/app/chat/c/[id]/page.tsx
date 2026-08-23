@@ -45,7 +45,9 @@ export default async function ConversationPage({ params }: ConversationPageProps
 
   return (
     <ChatPanel
+      key={conversation.id}
       conversationId={conversation.id}
+      conversationTitle={conversation.title}
       initialMessages={initialMessages}
       initialModel={conversation.model}
       allModels={allModels}

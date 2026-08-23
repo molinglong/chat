@@ -3,10 +3,31 @@ import localFont from "next/font/local";
 import { Providers } from "@/components/Providers";
 import "./globals.css";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
+const pingfang = localFont({
+  src: [
+    {
+      path: "./fonts/pingfangsc-light.otf",
+      weight: "300",
+      style: "normal",
+    },
+    {
+      path: "./fonts/pingfangsc-regular.otf",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "./fonts/pingfangsc-medium.otf",
+      weight: "500",
+      style: "normal",
+    },
+    {
+      path: "./fonts/pingfangsc-semibold.otf",
+      weight: "600",
+      style: "normal",
+    },
+  ],
+  variable: "--font-sans",
+  display: "swap",
 });
 const geistMono = localFont({
   src: "./fonts/GeistMonoVF.woff",
@@ -43,7 +64,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100`}
+        className={`${pingfang.variable} ${geistMono.variable} font-sans antialiased bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100`}
       >
         <Providers>{children}</Providers>
       </body>
