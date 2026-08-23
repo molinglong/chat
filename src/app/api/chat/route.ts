@@ -150,6 +150,42 @@ export async function POST(req: NextRequest) {
   let model = provider(modelId)
   const systemParts: string[] = []
   if (memorySystemPrompt) systemParts.push(memorySystemPrompt)
+
+  // Visualization capabilities — tell the model to auto-use diagrams/charts
+  systemParts.push([
+    '## Visualization Capabilities',
+    '',
+    'You can automatically generate visual content using code blocks. Use them PROACTIVELY without waiting for the user to ask — whenever a diagram, chart, or formula would make your answer clearer.',
+    '',
+    '### Mermaid Diagrams',
+    'Use ```mermaid for flowcharts, sequence diagrams, architecture diagrams, state machines, and any process that benefits from visualization.',
+    '',
+    'Example:',
+    '```mermaid',
+    'sequenceDiagram',
+    '    Alice->>Bob: Hello',
+    '    Bob-->>Alice: Hi!',
+    '```',
+    '',
+    '### Data Charts',
+    'Use ```chart for bar charts, line charts, pie charts, and area charts. The JSON format:',
+    '```chart',
+    '{',
+    '  "type": "bar|line|pie|area",',
+    '  "data": {',
+    '    "labels": ["A", "B", "C"],',
+    '    "datasets": [{"label": "Series", "data": [10, 20, 15]}]',
+    '  },',
+    '  "title": "Chart Title"',
+    '}',
+    '```',
+    '',
+    '### Math Formulas',
+    'Use $...$ for inline math and $$...$$ for block formulas. Support full LaTeX syntax.',
+    '',
+    '**Important**: Always proactively use these visualizations when they help explain the answer. For example, when comparing data, automatically include a chart. When explaining a process, automatically include a mermaid diagram. When discussing math, always use LaTeX notation.',
+  ].join('\n'))
+
   if (deepThink && !modelDef.supportsReasoning) {
     systemParts.push('You are a thoughtful AI assistant. Before answering, think step by step about the question inside <think> tags. After your thinking process, provide your final answer outside the tags.')
     model = wrapLanguageModel({

@@ -1,10 +1,16 @@
 'use client'
 
 import React from 'react'
+import dynamic from 'next/dynamic'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import { CodeBlock } from './CodeBlock'
 import { cn } from '@/lib/utils'
+
+const MermaidBlock = dynamic(() => import('./MermaidBlock').then(m => m.MermaidBlock), { ssr: false })
+const ChartBlock = dynamic(() => import('./ChartBlock').then(m => m.ChartBlock), { ssr: false })
 import type { Components } from 'react-markdown'
 
 interface MarkdownRendererProps {
@@ -21,6 +27,19 @@ const components: Components = {
     const isBlock = match || codeString.includes('\n')
 
     if (isBlock) {
+      const lang = match?.[1]?.toLowerCase() || ''
+
+      // Route mermaid code blocks to MermaidBlock
+      if (lang === 'mermaid') {
+        return <MermaidBlock code={codeString} />
+      }
+
+      // Route chart code blocks to ChartBlock
+      if (lang === 'chart') {
+        return <ChartBlock code={codeString} />
+      }
+
+      // Regular code block
       return <CodeBlock language={match?.[1]} code={codeString} />
     }
 
@@ -39,7 +58,6 @@ const components: Components = {
     )
   },
   pre({ children }) {
-    // Let the code component handle everything
     return <>{children}</>
   },
   a({ href, children, ...props }) {
@@ -138,7 +156,11 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
 }: MarkdownRendererProps) {
   return (
     <div className={cn('prose-sm max-w-none break-words overflow-hidden text-zinc-800 dark:text-zinc-200', className)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={components}
+      >
         {content}
       </ReactMarkdown>
     </div>

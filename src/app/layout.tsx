@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Providers } from "@/components/Providers";
+import "katex/dist/katex.min.css";
 import "./globals.css";
 
 const pingfang = localFont({
