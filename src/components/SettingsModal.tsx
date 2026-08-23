@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Save, Trash2, Loader2, CheckCircle, AlertCircle, Key, Eye, EyeOff, ChevronDown, Zap, ExternalLink } from 'lucide-react'
+import { Save, Trash2, Loader2, CheckCircle, AlertCircle, Key, Eye, EyeOff, ChevronDown, Zap, ExternalLink, Brain, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatStore } from '@/store/chat-store'
 
@@ -16,6 +16,25 @@ interface KeyInfo {
   provider: string
   maskedKey: string
   updatedAt: string
+}
+
+interface MemoryInfo {
+  id: string
+  category: string
+  content: string
+  source: string
+  updatedAt: string
+}
+
+const MEMORY_CATEGORY_LABELS: Record<string, string> = {
+  user_info: '身份',
+  preference: '偏好',
+  habit: '习惯',
+  project: '项目',
+  skill: '技能',
+  manual: '手动',
+  other: '其他',
+  general: '其他',
 }
 
 const PROVIDER_URL: Record<string, string> = {
@@ -46,6 +65,12 @@ export function SettingsModal() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [showPassword, setShowPassword] = useState<Record<string, boolean>>({})
   const [helpExpanded, setHelpExpanded] = useState(false)
+  const [memories, setMemories] = useState<MemoryInfo[]>([])
+  const [memoryEnabled, setMemoryEnabled] = useState(true)
+  const [memoryDraft, setMemoryDraft] = useState('')
+  const [memorySaving, setMemorySaving] = useState(false)
+  const [memoryDeleting, setMemoryDeleting] = useState<string | null>(null)
+  const [memorySectionExpanded, setMemorySectionExpanded] = useState(false)
 
   // Fetch data when modal opens
   useEffect(() => {
@@ -54,10 +79,13 @@ export function SettingsModal() {
     Promise.all([
       fetch('/api/providers').then((r) => r.json()),
       fetch('/api/keys').then((r) => r.json()),
+      fetch('/api/memories').then((r) => r.json()),
     ])
-      .then(([provs, keyList]) => {
+      .then(([provs, keyList, memoryData]) => {
         setProviders(provs)
         setKeys(keyList)
+        setMemories(memoryData?.memories ?? [])
+        setMemoryEnabled(memoryData?.memoryEnabled ?? true)
       })
       .catch(() => setMessage({ type: 'error', text: '加载数据失败' }))
       .finally(() => setLoading(false))
@@ -96,8 +124,8 @@ export function SettingsModal() {
       setMessage({ type: 'success', text: `${providerId} API Key 已保存` })
       const newKeys = await fetch('/api/keys').then((r) => r.json())
       setKeys(newKeys)
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err?.message || '保存失败，请重试' })
+    } catch (err) {
+      setMessage({ type: 'error', text: err instanceof Error && err.message ? err.message : '保存失败，请重试' })
     } finally {
       setSaving((s) => ({ ...s, [providerId]: false }))
     }
@@ -145,6 +173,57 @@ export function SettingsModal() {
       setTestResult((r) => ({ ...r, [providerId]: 'error' }))
     } finally {
       setTesting((t) => ({ ...t, [providerId]: false }))
+    }
+  }
+
+  async function handleToggleMemory(enabled: boolean) {
+    setMemoryEnabled(enabled)
+    try {
+      const res = await fetch('/api/memories/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      })
+      if (!res.ok) throw new Error()
+      setMessage({ type: 'success', text: enabled ? '跨对话记忆已开启' : '跨对话记忆已关闭' })
+    } catch {
+      setMemoryEnabled(!enabled)
+      setMessage({ type: 'error', text: '切换失败，请重试' })
+    }
+  }
+
+  async function handleAddMemory() {
+    const content = memoryDraft.trim()
+    if (!content) return
+    setMemorySaving(true)
+    try {
+      const res = await fetch('/api/memories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || '添加失败')
+      setMemoryDraft('')
+      setMemories((prev) => [data, ...prev])
+      setMessage({ type: 'success', text: '记忆已添加' })
+    } catch (err) {
+      setMessage({ type: 'error', text: err instanceof Error && err.message ? err.message : '添加失败，请重试' })
+    } finally {
+      setMemorySaving(false)
+    }
+  }
+
+  async function handleDeleteMemory(id: string) {
+    setMemoryDeleting(id)
+    try {
+      const res = await fetch(`/api/memories/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+      setMemories((prev) => prev.filter((m) => m.id !== id))
+    } catch {
+      setMessage({ type: 'error', text: '删除失败，请重试' })
+    } finally {
+      setMemoryDeleting(null)
     }
   }
 
@@ -337,6 +416,132 @@ export function SettingsModal() {
               {/* Provider cards */}
               <div className="space-y-2">
                 {providers.map(renderProviderCard)}
+              </div>
+
+              {/* 记忆管理 */}
+              <div className="mt-4 rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-white/60 dark:bg-zinc-900/40 px-3.5 py-3 space-y-2.5">
+                {/* Header */}
+                <button
+                  onClick={() => setMemorySectionExpanded(!memorySectionExpanded)}
+                  className="w-full flex items-center gap-2.5 text-left"
+                >
+                  <Brain className="w-4 h-4 text-zinc-400 shrink-0" />
+                  <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200 flex-1 truncate">
+                    跨对话记忆
+                  </span>
+                  <span className="text-[11px] text-zinc-400 shrink-0">{memories.length} 条</span>
+                  <ChevronDown className={cn('w-3.5 h-3.5 text-zinc-400 shrink-0 transition-transform', memorySectionExpanded && 'rotate-180')} />
+                </button>
+
+                {/* 开关 */}
+                <div className="flex items-center justify-between gap-3 pt-2 border-t border-zinc-200/40 dark:border-zinc-800/40">
+                  <div className="text-left min-w-0">
+                    <p className="text-xs text-zinc-700 dark:text-zinc-300">记忆功能</p>
+                    <p className="text-[11px] text-zinc-400 truncate">换新对话时 AI 仍记得关于你的信息</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={memoryEnabled}
+                    onClick={() => handleToggleMemory(!memoryEnabled)}
+                    className={cn(
+                      'relative w-9 h-5 rounded-full transition-colors shrink-0',
+                      memoryEnabled ? 'bg-zinc-900 dark:bg-zinc-50' : 'bg-zinc-200 dark:bg-zinc-700'
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white dark:bg-zinc-900 transition-transform',
+                        memoryEnabled && 'translate-x-4'
+                      )}
+                    />
+                  </button>
+                </div>
+
+                {/* 展开内容 */}
+                {memorySectionExpanded && (
+                  <div className="space-y-2.5">
+                    {/* 手动添加 */}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={memoryDraft}
+                        onChange={(e) => setMemoryDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                            e.preventDefault()
+                            handleAddMemory()
+                          }
+                        }}
+                        placeholder="手动添加一条记忆，如：用户喜欢简洁的设计"
+                        className={cn(
+                          'flex-1 min-w-0 rounded-lg border px-2.5 py-1.5 text-xs',
+                          'border-zinc-200/60 dark:border-zinc-700/60',
+                          'bg-white dark:bg-zinc-800/60',
+                          'text-zinc-900 dark:text-zinc-100',
+                          'placeholder:text-zinc-400 dark:placeholder:text-zinc-500',
+                          'focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10',
+                          'focus:border-zinc-400 dark:focus:border-zinc-600'
+                        )}
+                      />
+                      <button
+                        onClick={handleAddMemory}
+                        disabled={!memoryDraft.trim() || memorySaving}
+                        className={cn(
+                          'px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 shrink-0',
+                          memoryDraft.trim() && !memorySaving
+                            ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-[0.97]'
+                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed'
+                        )}
+                      >
+                        {memorySaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                        添加
+                      </button>
+                    </div>
+
+                    {/* 记忆列表 */}
+                    {memories.length === 0 ? (
+                      <p className="text-[11px] text-zinc-400 text-left py-1">
+                        暂无记忆。聊天中告诉 AI 你的喜好，它会自动记下来。
+                      </p>
+                    ) : (
+                      <ul className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
+                        {memories.map((m) => (
+                          <li
+                            key={m.id}
+                            className="flex items-start gap-2 px-2.5 py-2 rounded-lg bg-zinc-100/60 dark:bg-zinc-800/50 border border-zinc-200/40 dark:border-zinc-700/40"
+                          >
+                            <div className="flex-1 min-w-0 text-left">
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-200/80 dark:bg-zinc-700/80 text-zinc-500 dark:text-zinc-400 shrink-0">
+                                  {MEMORY_CATEGORY_LABELS[m.category] ?? '其他'}
+                                </span>
+                                {m.source === 'manual' && (
+                                  <span className="text-[10px] text-zinc-400 shrink-0">手动添加</span>
+                                )}
+                              </div>
+                              <p className="text-xs text-zinc-700 dark:text-zinc-300 break-words leading-relaxed">
+                                {m.content}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => handleDeleteMemory(m.id)}
+                              disabled={memoryDeleting === m.id}
+                              className="shrink-0 p-1 rounded-md text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                              aria-label="删除记忆"
+                            >
+                              {memoryDeleting === m.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Help section */}

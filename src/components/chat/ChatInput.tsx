@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect, KeyboardEvent, ChangeEvent } from 'react'
-import { Send, Square, X } from 'lucide-react'
+import { Send, Square, X, Brain } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { FileUpload, type Attachment } from './FileUpload'
 import { ModelSelector } from './ModelSelector'
@@ -15,9 +15,11 @@ export interface ChatInputProps {
   models: ModelDefinition[]
   selectedModel: string
   onModelChange: (modelId: string) => void
+  deepThink: boolean
+  onDeepThinkChange: (enabled: boolean) => void
 }
 
-export function ChatInput({ onSend, onStop, isLoading, className, models, selectedModel, onModelChange }: ChatInputProps) {
+export function ChatInput({ onSend, onStop, isLoading, className, models, selectedModel, onModelChange, deepThink, onDeepThinkChange }: ChatInputProps) {
   const [input, setInput] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -135,12 +137,28 @@ export function ChatInput({ onSend, onStop, isLoading, className, models, select
 
           {/* Bottom controls row */}
           <div className="flex items-center justify-between px-3 pb-2 pt-1.5">
-            {/* Left: attachment */}
-            <FileUpload
-              attachments={attachments}
-              onAttachmentsChange={setAttachments}
-              disabled={isLoading}
-            />
+            {/* Left: attachment + deep think toggle */}
+            <div className="flex items-center gap-1.5">
+              <FileUpload
+                attachments={attachments}
+                onAttachmentsChange={setAttachments}
+                disabled={isLoading}
+              />
+              <button
+                onClick={() => onDeepThinkChange(!deepThink)}
+                className={cn(
+                  'flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors',
+                  deepThink
+                    ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300'
+                    : 'bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400'
+                )}
+                title="深度思考"
+                aria-label="深度思考"
+                aria-pressed={deepThink}
+              >
+                <Brain className="w-3 h-3" />
+              </button>
+            </div>
 
             {/* Right: model selector + send button */}
             <div className="flex items-center gap-1.5">

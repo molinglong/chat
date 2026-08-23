@@ -158,11 +158,18 @@ export function ModelSelector({
                   >
                     <div className="flex items-center justify-between">
                       <span>{model.name}</span>
-                      {model.supportsVision && (
-                        <span className="text-[9px] px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
-                          Vision
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {model.supportsReasoning && (
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-500 dark:text-indigo-300">
+                            Reasoning
+                          </span>
+                        )}
+                        {model.supportsVision && (
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                            Vision
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </button>
                 ))}

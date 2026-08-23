@@ -35,11 +35,19 @@ export default async function ConversationPage({ params }: ConversationPageProps
   }
 
   // Convert DB messages to UIMessage format
-  const initialMessages: UIMessage[] = conversation.messages.map((msg) => ({
-    id: msg.id,
-    role: msg.role as 'user' | 'assistant' | 'system',
-    parts: [{ type: 'text' as const, text: msg.content, state: 'done' as const }],
-  }))
+  const initialMessages: UIMessage[] = conversation.messages.map((msg) => {
+    const parts: UIMessage['parts'] = []
+    // Include reasoning parts if the message has saved reasoning
+    if (msg.reasoning) {
+      parts.push({ type: 'reasoning' as const, text: msg.reasoning, state: 'done' as const })
+    }
+    parts.push({ type: 'text' as const, text: msg.content, state: 'done' as const })
+    return {
+      id: msg.id,
+      role: msg.role as 'user' | 'assistant' | 'system',
+      parts,
+    }
+  })
 
   const allModels = getAllModels()
 

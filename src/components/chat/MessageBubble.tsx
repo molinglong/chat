@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect, KeyboardEvent } from 'react'
-import { Bot, Copy, Check, RotateCw, Pencil, X } from 'lucide-react'
+import { Bot, Copy, Check, RotateCw, Pencil, X, ChevronDown, Brain } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTypewriter } from '@/lib/useTypewriter'
 import { MarkdownRenderer } from './MarkdownRenderer'
@@ -31,13 +31,31 @@ export function MessageBubble({
   const [copied, setCopied] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState('')
+  const [showReasoning, setShowReasoning] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Extract reasoning parts from message (for deep thinking / reasoning models)
+  const reasoningParts = message.parts.filter((p) => p.type === 'reasoning')
+  const reasoningText = reasoningParts.map((p) => p.text).join('')
+  const lastReasoningPart = reasoningParts[reasoningParts.length - 1] as { state?: string } | undefined
+  const isReasoningStreaming = isStreaming && isAssistant && lastReasoningPart?.state === 'streaming'
 
   // Extract text from message parts
   const textParts = message.parts.filter((p) => p.type === 'text')
-  const text = textParts.map((p: any) => p.text).join('')
+  const text = textParts.map((p) => p.text).join('')
   const lastPart = textParts[textParts.length - 1] as { state?: string } | undefined
   const isCurrentlyStreaming = isStreaming && isAssistant && lastPart?.state === 'streaming'
+  const isWaitingForReasoning = isStreaming && isAssistant && !reasoningText && !text
+
+  // Auto-collapse reasoning when done, auto-expand when streaming starts
+  useEffect(() => {
+    if (isReasoningStreaming) {
+      setShowReasoning(true)
+    } else if (isCurrentlyStreaming && reasoningText) {
+      // Auto-collapse when text streaming starts
+      setShowReasoning(false)
+    }
+  }, [isReasoningStreaming, isCurrentlyStreaming, reasoningText])
 
   // Typewriter effect for assistant messages
   const { displayText, isTyping } = useTypewriter(text, isAssistant)
@@ -45,8 +63,8 @@ export function MessageBubble({
   // Show cursor while AI is streaming OR typewriter is still catching up
   const showCursor = isCurrentlyStreaming || isTyping
 
-  // Show actions only when message is fully rendered (not streaming, not typing)
-  const showActions = isStreaming !== undefined && !isCurrentlyStreaming && !isTyping && text.length > 0
+  // Show actions only when message is fully rendered (not streaming, not typing, not reasoning)
+  const showActions = isStreaming !== undefined && !isCurrentlyStreaming && !isTyping && !isReasoningStreaming && text.length > 0
 
   // Auto-focus and select when entering edit mode
   useEffect(() => {
@@ -155,20 +173,51 @@ export function MessageBubble({
       {/* Message content */}
       <div className={cn('min-w-0 overflow-hidden', isUser ? 'max-w-[80%]' : 'flex-1 max-w-full')}>
         {isAssistant ? (
-          displayText ? (
-            <div className="relative text-sm text-zinc-800 dark:text-zinc-100 leading-relaxed">
-              <MarkdownRenderer content={displayText} />
-              {showCursor && (
-                <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-zinc-600 dark:bg-zinc-400 animate-pulse align-middle" />
-              )}
-            </div>
-          ) : isCurrentlyStreaming ? (
-            <div className="flex items-center gap-1.5 py-1">
-              <span className="w-2 h-2 bg-zinc-400 dark:bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-2 h-2 bg-zinc-400 dark:bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <span className="w-2 h-2 bg-zinc-400 dark:bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-            </div>
-          ) : null
+          <>
+            {/* Reasoning / deep thinking section */}
+            {reasoningText && (
+              <div className="mb-2">
+                <button
+                  onClick={() => setShowReasoning(!showReasoning)}
+                  className="flex items-center gap-1.5 text-[11px] font-medium text-indigo-500 dark:text-indigo-400 hover:opacity-80 transition-opacity"
+                >
+                  <Brain className="w-3 h-3" />
+                  <span>思考过程</span>
+                  <ChevronDown className={cn('w-3 h-3 transition-transform', showReasoning ? '' : '-rotate-90')} />
+                </button>
+                {showReasoning && (
+                  <div className="mt-1.5 pl-3 border-l-2 border-indigo-200 dark:border-indigo-800/50">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 whitespace-pre-wrap break-words leading-relaxed">
+                      {reasoningText}
+                      {isReasoningStreaming && (
+                        <span className="inline-block w-1 h-3 ml-0.5 bg-indigo-400 dark:bg-indigo-500 animate-pulse align-middle" />
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Main response */}
+            {displayText ? (
+              <div className="relative text-sm text-zinc-800 dark:text-zinc-100 leading-relaxed">
+                <MarkdownRenderer content={displayText} />
+                {showCursor && (
+                  <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-zinc-600 dark:bg-zinc-400 animate-pulse align-middle" />
+                )}
+              </div>
+            ) : isWaitingForReasoning ? (
+              <div className="flex items-center gap-1.5 py-1">
+                <Brain className="w-3 h-3 text-indigo-400 dark:text-indigo-500 animate-pulse" />
+                <span className="text-xs text-zinc-400 dark:text-zinc-500">思考中...</span>
+              </div>
+            ) : isCurrentlyStreaming ? (
+              <div className="flex items-center gap-1.5 py-1">
+                <span className="w-2 h-2 bg-zinc-400 dark:bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2 h-2 bg-zinc-400 dark:bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-2 h-2 bg-zinc-400 dark:bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            ) : null}
+          </>
         ) : (
           <div className="rounded-lg bg-zinc-900 dark:bg-zinc-100 px-3 py-1.5 rounded-br-sm">
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-white dark:text-zinc-900">{text}</p>

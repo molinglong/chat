@@ -5,6 +5,7 @@ export interface ModelDefinition {
   contextWindow: number
   supportsVision: boolean
   supportsFiles: boolean
+  supportsReasoning: boolean  // 是否原生支持推理/思考（如 DeepSeek-R1, o1 等）
 }
 
 export interface ProviderDefinition {

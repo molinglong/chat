@@ -13,6 +13,7 @@ import type { ModelDefinition } from '@/lib/ai/types'
 import type { Attachment } from './FileUpload'
 
 const MODEL_STORAGE_KEY = 'chat:selectedModel'
+const DEEP_THINK_STORAGE_KEY = 'chat:deepThink'
 
 interface ChatPanelProps {
   conversationId?: string
@@ -63,13 +64,18 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const [currentModel, setCurrentModel] = useState(initialModel)
   const [conversationId, setConversationId] = useState(initialConversationId)
+  const [deepThink, setDeepThink] = useState(false)
 
-  // On mount, for new chats, load the last selected model from localStorage
+  // On mount, for new chats, load the last selected model and deep think preference from localStorage
   useEffect(() => {
     if (!initialConversationId) {
       const saved = localStorage.getItem(MODEL_STORAGE_KEY)
       if (saved && allModels.some((m) => m.id === saved)) {
         setCurrentModel(saved)
+      }
+      const savedDeepThink = localStorage.getItem(DEEP_THINK_STORAGE_KEY)
+      if (savedDeepThink === 'true') {
+        setDeepThink(true)
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -87,12 +93,13 @@ export function ChatPanel({
   // Keep ref in sync
   conversationIdRef.current = conversationId
 
-  // Create transport with current model and conversationId
+  // Create transport with current model, conversationId, and deepThink
   const transport = new DefaultChatTransport<UIMessage>({
     api: '/api/chat',
     body: {
       model: currentModel,
       conversationId: conversationId,
+      deepThink,
       // Attachments are read from ref at send time
       get attachments() {
         return attachmentsRef.current
@@ -151,6 +158,11 @@ export function ChatPanel({
         body: JSON.stringify({ model: modelId }),
       }).catch((err) => console.error('Failed to persist model:', err))
     }
+  }, [])
+
+  const handleDeepThinkChange = useCallback((enabled: boolean) => {
+    setDeepThink(enabled)
+    localStorage.setItem(DEEP_THINK_STORAGE_KEY, String(enabled))
   }, [])
 
   const handleRetry = useCallback(() => {
@@ -264,6 +276,8 @@ export function ChatPanel({
         models={allModels}
         selectedModel={currentModel}
         onModelChange={handleModelChange}
+        deepThink={deepThink}
+        onDeepThinkChange={handleDeepThinkChange}
       />
     </div>
   )
