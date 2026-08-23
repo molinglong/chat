@@ -48,7 +48,7 @@ const components: Components = {
       <code
         className={cn(
           'px-1.5 py-0.5 rounded text-sm font-mono',
-          'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300',
+          'bg-surface-muted text-content-secondary',
           className
         )}
         {...props}
@@ -66,18 +66,36 @@ const components: Components = {
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-zinc-900 dark:text-zinc-100 underline underline-offset-2 hover:text-zinc-600 dark:hover:text-zinc-400 break-all"
+        className="text-content-primary underline underline-offset-2 hover:text-content-secondary break-all"
         {...props}
       >
         {children}
       </a>
     )
   },
+  img({ src, alt, ...props }) {
+    return (
+      <img
+        src={src}
+        alt={alt || "图片"}
+        loading="lazy"
+        title="点击查看原图"
+        className="max-w-full h-auto max-h-[420px] rounded-lg border border-line bg-surface-muted my-3 cursor-zoom-in shadow-sm"
+        onClick={() => {
+          if (src) window.open(src, "_blank", "noopener")
+        }}
+        onError={(e) => {
+          e.currentTarget.style.display = "none"
+        }}
+        {...props}
+      />
+    )
+  },
   table({ children, ...props }) {
     return (
       <div className="overflow-x-auto my-3">
         <table
-          className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded"
+          className="min-w-full divide-y divide-line border border-line rounded"
           {...props}
         >
           {children}
@@ -88,7 +106,7 @@ const components: Components = {
   th({ children, ...props }) {
     return (
       <th
-        className="px-3 py-2 bg-zinc-50 dark:bg-zinc-800 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-100"
+        className="px-3 py-2 bg-surface-muted text-left text-sm font-semibold text-content-primary"
         {...props}
       >
         {children}
@@ -98,7 +116,7 @@ const components: Components = {
   td({ children, ...props }) {
     return (
       <td
-        className="px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 border-t border-zinc-200 dark:border-zinc-800"
+        className="px-3 py-2 text-sm text-content-secondary border-t border-line"
         {...props}
       >
         {children}
@@ -138,7 +156,7 @@ const components: Components = {
   blockquote({ children, ...props }) {
     return (
       <blockquote
-        className="border-l-4 border-zinc-300 dark:border-zinc-700 pl-4 my-3 text-zinc-600 dark:text-zinc-400 italic"
+        className="border-l-4 border-line-strong pl-4 my-3 text-content-secondary italic"
         {...props}
       >
         {children}
@@ -146,7 +164,7 @@ const components: Components = {
     )
   },
   hr(props) {
-    return <hr className="my-4 border-zinc-200 dark:border-zinc-800" {...props} />
+    return <hr className="my-4 border-line" {...props} />
   },
 }
 
@@ -155,7 +173,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
   className,
 }: MarkdownRendererProps) {
   return (
-    <div className={cn('prose-sm max-w-none break-words overflow-hidden text-zinc-800 dark:text-zinc-200', className)}>
+    <div className={cn('prose-sm max-w-none break-words overflow-hidden text-content-primary', className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}

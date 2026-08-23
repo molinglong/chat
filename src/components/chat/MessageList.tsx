@@ -35,10 +35,10 @@ export function MessageList({ messages, isStreaming, className, onRegenerate, on
     return (
       <div className="flex flex-col items-center justify-center h-full px-4">
         <div className="max-w-2xl text-center space-y-1.5">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          <h2 className="text-lg font-semibold text-content-primary">
             开始新对话
           </h2>
-          <p className="text-zinc-500 dark:text-zinc-400 text-sm">
+          <p className="text-content-muted text-sm">
             选择模型，输入问题，开始对话。
           </p>
         </div>

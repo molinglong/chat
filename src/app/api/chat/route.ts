@@ -1,10 +1,19 @@
 import { NextRequest } from "next/server"
-import { streamText, wrapLanguageModel, extractReasoningMiddleware, type ModelMessage } from "ai"
+import {
+  streamText,
+  wrapLanguageModel,
+  extractReasoningMiddleware,
+  toUIMessageStream,
+  createUIMessageStreamResponse,
+  type ModelMessage,
+  type UIMessageChunk,
+} from "ai"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { decrypt } from "@/lib/crypto"
 import { createProviderInstance, getModel } from "@/lib/ai/registry"
 import { buildMemorySystemPrompt, getRelevantMemories, extractAndSaveMemories } from "@/lib/memory"
+import { generateImage, extractImagePrompts, IMG_MARKER_REGEX } from "@/lib/ai/image"
 
 export const maxDuration = 60 // seconds – Vercel Pro allows up to 300
 
@@ -58,6 +67,65 @@ function convertToModelMessages(messages: IncomingMessage[]): ModelMessage[] {
       return { role: m.role, content: String(m.content ?? m.text ?? "") } as ModelMessage
     })
     .filter((m) => m.content !== "")
+}
+
+const IMG_PREFIX = "[IMG:"
+const IMG_PLACEHOLDER = "\n\n> 🎨 正在生成图片…\n\n"
+
+/**
+ * 过滤流式输出中的 [IMG:...] 标记(跨 chunk 安全),替换为占位提示。
+ * 最终正文在 onFinish 中统一替换为真实图片后入库,
+ * 客户端收到 finish 事件时会拉取库中最终内容覆盖显示。
+ */
+function createImgMarkerFilterStream(): TransformStream<UIMessageChunk, UIMessageChunk> {
+  let pending = ""
+
+  // 计算 buf 末尾与 IMG_PREFIX 前缀的最长重叠长度(标记可能被 chunk 截断)
+  const longestPrefixAtEnd = (s: string): number => {
+    for (let len = IMG_PREFIX.length; len > 0; len--) {
+      if (s.endsWith(IMG_PREFIX.slice(0, len))) return len
+    }
+    return 0
+  }
+
+  return new TransformStream<UIMessageChunk, UIMessageChunk>({
+    transform(chunk, controller) {
+      if (chunk.type !== "text-delta") {
+        controller.enqueue(chunk)
+        return
+      }
+      let buf = pending + chunk.delta
+      pending = ""
+
+      // 逐个替换完整的 [IMG:...] 标记;未闭合的标记挂起等待后续 chunk
+      while (true) {
+        const startIdx = buf.indexOf(IMG_PREFIX)
+        if (startIdx === -1) {
+          const hold = longestPrefixAtEnd(buf)
+          if (hold > 0) {
+            pending = buf.slice(buf.length - hold)
+            buf = buf.slice(0, buf.length - hold)
+          }
+          break
+        }
+        const endIdx = buf.indexOf("]", startIdx)
+        if (endIdx === -1) {
+          pending = buf.slice(startIdx)
+          buf = buf.slice(0, startIdx)
+          break
+        }
+        buf = buf.slice(0, startIdx) + IMG_PLACEHOLDER + buf.slice(endIdx + 1)
+      }
+
+      if (buf) {
+        controller.enqueue({ type: "text-delta", id: chunk.id, delta: buf })
+      }
+    },
+    flush() {
+      // 流结束时仍有未闭合标记(模型输出被截断),直接丢弃;
+      // 最终入库内容在 onFinish 中会同样清理残留标记。
+    },
+  })
 }
 
 /** Extract plain text from a message (UIMessage or CoreMessage) */
@@ -186,6 +254,20 @@ export async function POST(req: NextRequest) {
     '**Important**: Always proactively use these visualizations when they help explain the answer. For example, when comparing data, automatically include a chart. When explaining a process, automatically include a mermaid diagram. When discussing math, always use LaTeX notation.',
   ].join('\n'))
 
+  // Image generation — tell the model how to request images
+  systemParts.push([
+    '## Image Generation',
+    '',
+    'You can generate images. When the user asks to see or generate an image (e.g. "XX长什么样", "画一只猫", "来张配图", "generate a picture of..."), place this marker EXACTLY where the image should appear (usually at the end of your answer, on its own line):',
+    '',
+    '[IMG:detailed image description]',
+    '',
+    '- Write the description in the same language as the user. Include subject, style, composition and lighting.',
+    '- At most 2 images per reply, and only when the user clearly wants an image or a visual.',
+    '- Never use it for charts or diagrams — use mermaid/chart code blocks for those.',
+    '- Do not output anything else inside the brackets.',
+  ].join('\n'))
+
   if (deepThink && !modelDef.supportsReasoning) {
     systemParts.push('You are a thoughtful AI assistant. Before answering, think step by step about the question inside <think> tags. After your thinking process, provide your final answer outside the tags.')
     model = wrapLanguageModel({
@@ -228,7 +310,37 @@ export async function POST(req: NextRequest) {
     ...(system ? { system } : {}),
     onFinish: async ({ text, reasoningText }) => {
       // Ensure content is always a non-null string (Prisma schema requires String, not String?)
-      const content = text ?? ""
+      let content = text ?? ""
+
+      // 检测 [IMG:...] 标记并调用通义万相生成图片(使用百炼/千问的 Key)
+      const imagePrompts = extractImagePrompts(content)
+      if (imagePrompts.length > 0) {
+        const dashKeyRecord = await prisma.apiKey.findUnique({
+          where: { userId_provider: { userId, provider: "qianwen" } },
+        })
+        if (dashKeyRecord) {
+          const dashKey = decrypt(dashKeyRecord.encryptedKey)
+          const replacements: string[] = []
+          for (const prompt of imagePrompts) {
+            try {
+              const localUrl = await generateImage(prompt, dashKey)
+              replacements.push(`![${prompt}](${localUrl})`)
+            } catch (err) {
+              const reason = err instanceof Error ? err.message : "未知原因"
+              console.error("[chat] Image generation failed:", reason)
+              replacements.push(`> ⚠️ 图片生成失败:${reason.replace(/\s+/g, " ")}`)
+            }
+          }
+          let idx = 0
+          content = content.replace(IMG_MARKER_REGEX, () => replacements[idx++])
+        } else {
+          // 未配置通义千问(百炼)Key,静默移除标记
+          content = content.replace(IMG_MARKER_REGEX, "")
+        }
+      }
+      // 移除模型输出被截断时残留的未闭合标记(避免原始标记入库)
+      content = content.replace(/\[IMG:[^\]]*$/g, "")
+
       try {
         // Persist assistant response (with reasoning if available)
         await prisma.message.create({
@@ -270,8 +382,16 @@ export async function POST(req: NextRequest) {
     responseHeaders["X-Conversation-Title"] = encodeURIComponent(title)
   }
 
-  return result.toUIMessageStreamResponse({
-    headers: responseHeaders,
+  // 手动构建 UI 消息流:过滤掉 [IMG:...] 标记再发给客户端
+  const uiStream = toUIMessageStream({
+    stream: result.stream,
     sendReasoning: true,
+    sendStart: true,
+    sendFinish: true,
+  })
+
+  return createUIMessageStreamResponse({
+    headers: responseHeaders,
+    stream: uiStream.pipeThrough(createImgMarkerFilterStream()),
   })
 }

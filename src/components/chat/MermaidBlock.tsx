@@ -15,16 +15,16 @@ let lastRenderedCode = ''
 // ── macOS-style header bar ──────────────────────────────────────────
 function MacHeader({ onExpand }: { onExpand: () => void }) {
   return (
-    <div className="flex items-center justify-between px-4 py-2 bg-[#f6f6f6] dark:bg-[#2d2d2d] border-b border-[#e5e5e5] dark:border-[#3d3d3d]">
+    <div className="flex items-center justify-between px-4 py-2 bg-code-header border-b border-line">
       <div className="flex items-center gap-1.5">
         <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57] border border-[#e0443e]" />
         <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e] border border-[#dea123]" />
         <span className="w-2.5 h-2.5 rounded-full bg-[#28c840] border border-[#1eaa33]" />
       </div>
-      <span className="text-[11px] text-[#999] dark:text-[#808080] font-mono select-none">mermaid</span>
+      <span className="text-[11px] text-content-muted font-mono select-none">mermaid</span>
       <button
         onClick={onExpand}
-        className="flex items-center gap-1 text-[11px] text-[#999] dark:text-[#808080] hover:text-[#333] dark:hover:text-[#ccc] transition-colors"
+        className="flex items-center gap-1 text-[11px] text-content-muted hover:text-content-primary transition-colors"
         aria-label="全屏查看"
       >
         <Maximize2 className="w-3 h-3" />
@@ -65,12 +65,12 @@ function FullscreenModal({ svg, onClose }: { svg: string; onClose: () => void })
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-[#1c1c1c] dark:bg-[#111]"
+      className="fixed inset-0 z-50 flex flex-col bg-code-bg"
       onClick={onClose}
     >
       {/* Top bar */}
       <div
-        className="flex items-center justify-between px-4 py-2 bg-[#f6f6f6] dark:bg-[#2d2d2d] border-b border-[#e5e5e5] dark:border-[#3d3d3d] shrink-0"
+        className="flex items-center justify-between px-4 py-2 bg-code-header border-b border-line shrink-0"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -80,7 +80,7 @@ function FullscreenModal({ svg, onClose }: { svg: string; onClose: () => void })
         >
           <X className="w-2 h-2 text-[#820000] opacity-0 hover:opacity-100 transition-opacity" />
         </button>
-        <span className="text-[11px] text-[#999] dark:text-[#808080] font-mono select-none">mermaid</span>
+        <span className="text-[11px] text-content-muted font-mono select-none">mermaid</span>
         <div className="w-3" />
       </div>
 
@@ -98,27 +98,27 @@ function FullscreenModal({ svg, onClose }: { svg: string; onClose: () => void })
 
       {/* Bottom zoom bar */}
       <div
-        className="flex items-center justify-center gap-3 py-3 bg-[#f6f6f6] dark:bg-[#2d2d2d] border-t border-[#e5e5e5] dark:border-[#3d3d3d] shrink-0"
+        className="flex items-center justify-center gap-3 py-3 bg-code-header border-t border-line shrink-0"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           onClick={zoomOut}
           disabled={zoom <= zoomMin}
-          className="flex items-center justify-center w-7 h-7 rounded-full bg-white dark:bg-[#3a3a3a] border border-[#d1d1d1] dark:border-[#555] text-[#555] dark:text-[#bbb] hover:bg-[#e8e8e8] dark:hover:bg-[#4a4a4a] disabled:opacity-30 disabled:cursor-default transition-colors"
+          className="flex items-center justify-center w-7 h-7 rounded-full bg-surface border border-line-strong text-content-secondary hover:bg-surface-subtle disabled:opacity-30 disabled:cursor-default transition-colors"
           aria-label="缩小"
         >
           <Minus className="w-3 h-3" />
         </button>
         <button
           onClick={resetZoom}
-          className="text-[11px] text-[#555] dark:text-[#bbb] font-mono min-w-[3rem] text-center hover:text-[#000] dark:hover:text-white transition-colors"
+          className="text-[11px] text-content-secondary font-mono min-w-[3rem] text-center hover:text-content-primary transition-colors"
         >
           {Math.round(zoom * 100)}%
         </button>
         <button
           onClick={zoomIn}
           disabled={zoom >= zoomMax}
-          className="flex items-center justify-center w-7 h-7 rounded-full bg-white dark:bg-[#3a3a3a] border border-[#d1d1d1] dark:border-[#555] text-[#555] dark:text-[#bbb] hover:bg-[#e8e8e8] dark:hover:bg-[#4a4a4a] disabled:opacity-30 disabled:cursor-default transition-colors"
+          className="flex items-center justify-center w-7 h-7 rounded-full bg-surface border border-line-strong text-content-secondary hover:bg-surface-subtle disabled:opacity-30 disabled:cursor-default transition-colors"
           aria-label="放大"
         >
           <Plus className="w-3 h-3" />
@@ -196,10 +196,10 @@ export function MermaidBlock({ code, className }: MermaidBlockProps) {
 
   if (loading) {
     return (
-      <div className={cn('my-3 rounded-lg overflow-hidden border border-[#e5e5e5] dark:border-[#3d3d3d]', className)}>
+      <div className={cn('my-3 rounded-lg overflow-hidden border border-line', className)}>
         <MacHeader onExpand={() => {}} />
-        <div className="flex items-center justify-center py-8 bg-[#fafafa] dark:bg-[#1e1e1e]">
-          <span className="text-xs text-[#999] dark:text-[#808080]">渲染图表中...</span>
+        <div className="flex items-center justify-center py-8 bg-code-bg">
+          <span className="text-xs text-content-muted">渲染图表中...</span>
         </div>
       </div>
     )
@@ -207,14 +207,14 @@ export function MermaidBlock({ code, className }: MermaidBlockProps) {
 
   if (error) {
     return (
-      <div className={cn('my-3 rounded-lg overflow-hidden border border-[#e5e5e5] dark:border-[#3d3d3d]', className)}>
+      <div className={cn('my-3 rounded-lg overflow-hidden border border-line', className)}>
         <MacHeader onExpand={() => {}} />
-        <div className="bg-[#fafafa] dark:bg-[#1e1e1e] p-4">
+        <div className="bg-code-bg p-4">
           <div className="flex items-center gap-2 text-red-500 dark:text-red-400">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span className="text-xs font-medium">Mermaid 语法错误</span>
           </div>
-          <pre className="mt-2 text-xs text-[#666] dark:text-[#999] whitespace-pre-wrap break-words overflow-x-auto">{code}</pre>
+          <pre className="mt-2 text-xs text-content-secondary whitespace-pre-wrap break-words overflow-x-auto">{code}</pre>
         </div>
       </div>
     )
@@ -222,11 +222,11 @@ export function MermaidBlock({ code, className }: MermaidBlockProps) {
 
   return (
     <>
-      <div className={cn('my-3 rounded-lg overflow-hidden border border-[#e5e5e5] dark:border-[#3d3d3d]', className)}>
+      <div className={cn('my-3 rounded-lg overflow-hidden border border-line', className)}>
         <MacHeader onExpand={() => setFullscreen(true)} />
         <div
           ref={containerRef}
-          className="flex justify-center p-4 bg-[#fafafa] dark:bg-[#1e1e1e] overflow-x-auto [&_svg]:max-w-full"
+          className="flex justify-center p-4 bg-code-bg overflow-x-auto [&_svg]:max-w-full"
           dangerouslySetInnerHTML={{ __html: svg }}
         />
       </div>

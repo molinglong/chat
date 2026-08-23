@@ -44,13 +44,13 @@ const DEFAULT_COLORS = [
 // ── macOS-style header ──────────────────────────────────────────────
 function MacHeader({ title }: { title?: string }) {
   return (
-    <div className="flex items-center justify-between px-4 py-2 bg-[#f6f6f6] dark:bg-[#2d2d2d] border-b border-[#e5e5e5] dark:border-[#3d3d3d]">
+    <div className="flex items-center justify-between px-4 py-2 bg-code-header border-b border-line">
       <div className="flex items-center gap-1.5">
         <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57] border border-[#e0443e]" />
         <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e] border border-[#dea123]" />
         <span className="w-2.5 h-2.5 rounded-full bg-[#28c840] border border-[#1eaa33]" />
       </div>
-      <span className="text-[11px] text-[#999] dark:text-[#808080] font-mono select-none">
+      <span className="text-[11px] text-content-muted font-mono select-none">
         {title || 'chart'}
       </span>
       <div className="w-3" />
@@ -120,14 +120,14 @@ export function ChartBlock({ code, className }: ChartBlockProps) {
   // ── Error state ──────────────────────────────────────────────────
   if (!config) {
     return (
-      <div className={cn('my-3 rounded-lg overflow-hidden border border-[#e5e5e5] dark:border-[#3d3d3d]', className)}>
+      <div className={cn('my-3 rounded-lg overflow-hidden border border-line', className)}>
         <MacHeader title="chart" />
-        <div className="bg-[#fafafa] dark:bg-[#1e1e1e] p-4">
+        <div className="bg-code-bg p-4">
           <div className="flex items-center gap-2 text-red-500 dark:text-red-400">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span className="text-xs font-medium">图表 JSON 格式错误</span>
           </div>
-          <pre className="mt-2 text-xs text-[#666] dark:text-[#999] whitespace-pre-wrap break-words overflow-x-auto">{code}</pre>
+          <pre className="mt-2 text-xs text-content-secondary whitespace-pre-wrap break-words overflow-x-auto">{code}</pre>
         </div>
       </div>
     )
@@ -139,11 +139,11 @@ export function ChartBlock({ code, className }: ChartBlockProps) {
   )
 
   // ── Theme-aware recharts props ────────────────────────────────────
-  const gridStroke = isDark ? '#3d3d3d' : '#e5e5e5'
-  const axisStroke = isDark ? '#808080' : '#999'
-  const tooltipBg = isDark ? '#2d2d2d' : '#fff'
-  const tooltipBorder = isDark ? '#555' : '#d1d1d1'
-  const legendColor = isDark ? '#999' : '#666'
+  const gridStroke = isDark ? '#39393c' : '#e3e3e6'
+  const axisStroke = isDark ? '#70707a' : '#98989d'
+  const tooltipBg = isDark ? '#2c2c2e' : '#ffffff'
+  const tooltipBorder = isDark ? '#4a4a4e' : '#c9c9ce'
+  const legendColor = isDark ? '#a0a0a8' : '#6e6e73'
   const chartMargin = { top: 10, right: 20, left: 0, bottom: 5 }
 
   const renderChart = () => {
@@ -238,9 +238,9 @@ export function ChartBlock({ code, className }: ChartBlockProps) {
 
   // ── Success state ─────────────────────────────────────────────────
   return (
-    <div className={cn('my-3 rounded-lg overflow-hidden border border-[#e5e5e5] dark:border-[#3d3d3d]', className)}>
+    <div className={cn('my-3 rounded-lg overflow-hidden border border-line', className)}>
       <MacHeader title={config.title || 'chart'} />
-      <div className="bg-[#fafafa] dark:bg-[#1e1e1e] p-4">
+      <div className="bg-code-bg p-4">
         <div className="w-full max-w-2xl mx-auto">
           <ResponsiveContainer width="100%" height={300}>
             {renderChart() as React.ReactElement}

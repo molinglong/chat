@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect, KeyboardEvent, ChangeEvent } from 'react'
-import { Send, Square, X, Brain } from 'lucide-react'
+import { Send, Square, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { FileUpload, type Attachment } from './FileUpload'
 import { ModelSelector } from './ModelSelector'
@@ -74,9 +74,9 @@ export function ChatInput({ onSend, onStop, isLoading, className, models, select
         <div
           className={cn(
             'relative flex flex-col rounded-xl border z-20',
-            'border-zinc-200/60 dark:border-zinc-800/60',
-            'bg-white/70 dark:bg-zinc-900/70 backdrop-blur-xl',
-            'shadow-lg focus-within:border-zinc-400/80 dark:focus-within:border-zinc-600/80',
+            'border-line/60',
+            'bg-surface-glass backdrop-blur-xl',
+            'shadow-lg focus-within:border-line-strong',
             'transition-all'
           )}
         >
@@ -88,7 +88,7 @@ export function ChatInput({ onSend, onStop, isLoading, className, models, select
                   key={att.url + idx}
                   className={cn(
                     'group flex items-center gap-2 rounded-lg border',
-                    'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800',
+                    'border-line bg-surface-muted',
                     'px-2 py-1.5 max-w-[200px]'
                   )}
                 >
@@ -96,12 +96,12 @@ export function ChatInput({ onSend, onStop, isLoading, className, models, select
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={att.url} alt={att.name} className="w-5 h-5 rounded object-cover shrink-0" />
                   ) : (
-                    <div className="w-5 h-5 rounded bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center shrink-0 text-[8px] text-zinc-500 dark:text-zinc-400">
+                    <div className="w-5 h-5 rounded bg-surface-subtle flex items-center justify-center shrink-0 text-[8px] text-content-secondary">
                       {att.type.split('/')[1]?.toUpperCase().slice(0, 3) || 'FILE'}
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] text-zinc-700 dark:text-zinc-300 truncate">{att.name}</p>
+                    <p className="text-[11px] text-content-primary truncate">{att.name}</p>
                   </div>
                   <button
                     onClick={() => setAttachments((prev) => prev.filter((_, i) => i !== idx))}
@@ -127,8 +127,8 @@ export function ChatInput({ onSend, onStop, isLoading, className, models, select
               rows={1}
               className={cn(
                 'w-full resize-none bg-transparent text-sm',
-                'text-zinc-900 dark:text-zinc-100',
-                'placeholder:text-zinc-400 dark:placeholder:text-zinc-500',
+                'text-content-primary',
+                'placeholder:text-content-muted',
                 'focus:outline-none disabled:opacity-50',
                 'min-h-[24px] max-h-[200px]'
               )}
@@ -138,7 +138,7 @@ export function ChatInput({ onSend, onStop, isLoading, className, models, select
           {/* Bottom controls row */}
           <div className="flex items-center justify-between px-3 pb-2 pt-1.5">
             {/* Left: attachment + deep think toggle */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <FileUpload
                 attachments={attachments}
                 onAttachmentsChange={setAttachments}
@@ -147,21 +147,21 @@ export function ChatInput({ onSend, onStop, isLoading, className, models, select
               <button
                 onClick={() => onDeepThinkChange(!deepThink)}
                 className={cn(
-                  'flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors',
+                  'h-7 px-2.5 rounded-full text-[11px] font-medium transition-colors',
                   deepThink
-                    ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300'
-                    : 'bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400'
+                    ? 'bg-accent text-accent-foreground'
+                    : 'bg-surface-muted hover:bg-surface-subtle text-content-secondary'
                 )}
                 title="深度思考"
                 aria-label="深度思考"
                 aria-pressed={deepThink}
               >
-                <Brain className="w-3 h-3" />
+                深度思考
               </button>
             </div>
 
             {/* Right: model selector + send button */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <ModelSelector
                 models={models}
                 selectedModel={selectedModel}
@@ -172,8 +172,8 @@ export function ChatInput({ onSend, onStop, isLoading, className, models, select
                 <button
                   onClick={onStop}
                   className={cn(
-                    'p-2 rounded-full transition-colors shrink-0',
-                    'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200'
+                    'h-7 w-7 flex items-center justify-center rounded-full transition-colors shrink-0',
+                    'bg-accent text-accent-foreground hover:bg-accent-hover'
                   )}
                   aria-label="停止生成"
                 >
@@ -184,10 +184,10 @@ export function ChatInput({ onSend, onStop, isLoading, className, models, select
                   onClick={handleSend}
                   disabled={!input.trim() && attachments.length === 0}
                   className={cn(
-                    'p-2 rounded-full transition-colors shrink-0',
+                    'h-7 w-7 flex items-center justify-center rounded-full transition-colors shrink-0',
                     (input.trim() || attachments.length > 0)
-                      ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200'
-                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed'
+                      ? 'bg-accent text-accent-foreground hover:bg-accent-hover'
+                      : 'bg-surface-muted text-content-muted cursor-not-allowed'
                   )}
                   aria-label="发送消息"
                 >

@@ -36,12 +36,12 @@ export default function LoginPage() {
 
   return (
     <div className="w-full max-w-md">
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-8">
+      <div className="bg-surface rounded-2xl shadow-lg border border-line p-8">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
+          <h1 className="text-2xl font-bold text-content-primary">
             登录
           </h1>
-          <p className="text-zinc-500 dark:text-zinc-400 mt-2">
+          <p className="text-content-secondary mt-2">
             登录你的账户以继续
           </p>
         </div>
@@ -56,7 +56,7 @@ export default function LoginPage() {
           <div>
             <label
               htmlFor="email"
-              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5"
+              className="block text-sm font-medium text-content-secondary mb-1.5"
             >
               邮箱
             </label>
@@ -67,14 +67,14 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="w-full px-4 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 focus:border-transparent transition"
+              className="w-full px-4 py-2.5 rounded-lg border border-line-strong bg-surface text-content-primary placeholder:text-content-muted focus:outline-none focus:ring-2 focus:ring-line-strong focus:border-transparent transition"
             />
           </div>
 
           <div>
             <label
               htmlFor="password"
-              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5"
+              className="block text-sm font-medium text-content-secondary mb-1.5"
             >
               密码
             </label>
@@ -85,24 +85,24 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full px-4 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 focus:border-transparent transition"
+              className="w-full px-4 py-2.5 rounded-lg border border-line-strong bg-surface text-content-primary placeholder:text-content-muted focus:outline-none focus:ring-2 focus:ring-line-strong focus:border-transparent transition"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 rounded-lg bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 focus:ring-offset-2 dark:focus:ring-offset-zinc-900"
+            className="w-full py-2.5 rounded-lg bg-accent text-accent-foreground hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed font-medium transition focus:outline-none focus:ring-2 focus:ring-line-strong focus:ring-offset-2 dark:focus:ring-offset-surface"
           >
             {loading ? "登录中..." : "登录"}
           </button>
         </form>
 
-        <p className="text-center text-sm text-zinc-500 dark:text-zinc-400 mt-6">
+        <p className="text-center text-sm text-content-secondary mt-6">
           还没有账户？{" "}
           <Link
             href="/register"
-            className="text-zinc-900 dark:text-zinc-100 hover:underline font-medium"
+            className="text-content-primary hover:underline font-medium"
           >
             立即注册
           </Link>

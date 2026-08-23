@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Save, Trash2, Loader2, CheckCircle, AlertCircle, Key, Eye, EyeOff, ChevronDown, Zap, ExternalLink, Brain, Plus } from 'lucide-react'
+import { Save, Trash2, Loader2, CheckCircle, AlertCircle, Key, Eye, EyeOff, Zap, ExternalLink, Brain, Plus, Settings2, HelpCircle, Info, MessageSquare, GitBranch } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatStore } from '@/store/chat-store'
 
@@ -53,6 +53,24 @@ const PROVIDER_URL: Record<string, string> = {
   yi: 'https://platform.lingyiwanwu.com/apikeys',
 }
 
+type SectionId = 'providers' | 'memory' | 'general' | 'help' | 'about'
+
+type ThemeChoice = 'light' | 'dark' | 'system'
+
+const THEME_OPTIONS: { value: ThemeChoice; label: string }[] = [
+  { value: 'light', label: '浅色' },
+  { value: 'dark', label: '深色' },
+  { value: 'system', label: '跟随系统' },
+]
+
+const NAV_ITEMS: { id: SectionId; label: string; icon: typeof Key }[] = [
+  { id: 'providers', label: '服务商', icon: Key },
+  { id: 'memory', label: '记忆', icon: Brain },
+  { id: 'general', label: '通用', icon: Settings2 },
+  { id: 'help', label: '帮助', icon: HelpCircle },
+  { id: 'about', label: '关于', icon: Info },
+]
+
 export function SettingsModal() {
   const { settingsOpen, setSettingsOpen } = useChatStore()
   const [providers, setProviders] = useState<ProviderInfo[]>([])
@@ -64,13 +82,13 @@ export function SettingsModal() {
   const [testResult, setTestResult] = useState<Record<string, 'success' | 'error'>>({})
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [showPassword, setShowPassword] = useState<Record<string, boolean>>({})
-  const [helpExpanded, setHelpExpanded] = useState(false)
   const [memories, setMemories] = useState<MemoryInfo[]>([])
   const [memoryEnabled, setMemoryEnabled] = useState(true)
   const [memoryDraft, setMemoryDraft] = useState('')
   const [memorySaving, setMemorySaving] = useState(false)
   const [memoryDeleting, setMemoryDeleting] = useState<string | null>(null)
-  const [memorySectionExpanded, setMemorySectionExpanded] = useState(false)
+  const [activeSection, setActiveSection] = useState<SectionId>('providers')
+  const [themeChoice, setThemeChoice] = useState<ThemeChoice>('system')
 
   // Fetch data when modal opens
   useEffect(() => {
@@ -100,6 +118,24 @@ export function SettingsModal() {
     document.addEventListener('keydown', handleEscape)
     return () => document.removeEventListener('keydown', handleEscape)
   }, [settingsOpen, setSettingsOpen])
+
+  // Init theme choice from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem('theme')
+    setThemeChoice(stored === 'light' || stored === 'dark' ? stored : 'system')
+  }, [])
+
+  function applyTheme(choice: ThemeChoice) {
+    setThemeChoice(choice)
+    if (choice === 'system') {
+      localStorage.removeItem('theme')
+      const dark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      document.documentElement.classList.toggle('dark', dark)
+    } else {
+      localStorage.setItem('theme', choice)
+      document.documentElement.classList.toggle('dark', choice === 'dark')
+    }
+  }
 
   const getKeyForProvider = useCallback(
     (providerId: string) => keys.find((k) => k.provider === providerId),
@@ -229,6 +265,11 @@ export function SettingsModal() {
 
   if (!settingsOpen) return null
 
+  const configured = providers.filter((p) => keys.some((k) => k.provider === p.id))
+  const unconfigured = providers.filter((p) => !keys.some((k) => k.provider === p.id))
+
+  const sectionTitle = NAV_ITEMS.find((i) => i.id === activeSection)?.label
+
   const renderProviderCard = (provider: ProviderInfo) => {
     const existingKey = getKeyForProvider(provider.id)
     const draft = draftKeys[provider.id] ?? ''
@@ -243,18 +284,18 @@ export function SettingsModal() {
         key={provider.id}
         className={cn(
           'rounded-xl border px-3.5 py-3 space-y-2.5 transition-colors',
-          'border-zinc-200/60 dark:border-zinc-800/60',
-          'bg-white/60 dark:bg-zinc-900/40',
-          existingKey && 'bg-zinc-50/80 dark:bg-zinc-900/60'
+          'border-line/60',
+          'bg-surface/60',
+          existingKey && 'bg-surface-muted/80'
         )}
       >
         {/* Header: dot + name + status badge */}
         <div className="flex items-center gap-2.5">
           <div className={cn(
             'w-2 h-2 rounded-full shrink-0',
-            existingKey ? 'bg-green-500' : 'bg-zinc-300 dark:bg-zinc-600'
+            existingKey ? 'bg-green-500' : 'bg-content-muted/40'
           )} />
-          <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200 flex-1 truncate">
+          <span className="text-sm font-medium text-content-primary flex-1 truncate">
             {provider.name}
           </span>
           {existingKey ? (
@@ -262,7 +303,7 @@ export function SettingsModal() {
               已配置
             </span>
           ) : (
-            <span className="text-[11px] text-zinc-400 dark:text-zinc-500 shrink-0">
+            <span className="text-[11px] text-content-muted shrink-0">
               {provider.models.length} 个模型
             </span>
           )}
@@ -271,16 +312,16 @@ export function SettingsModal() {
         {/* Saved key display + actions */}
         {existingKey && (
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-zinc-100/80 dark:bg-zinc-800/80 border border-zinc-200/40 dark:border-zinc-700/40">
-              <Key className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-              <code className="text-xs text-zinc-600 dark:text-zinc-300 truncate">
+            <div className="flex items-center gap-1.5 flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-surface-muted/80 border border-line/40">
+              <Key className="w-3.5 h-3.5 text-content-muted shrink-0" />
+              <code className="text-xs text-content-secondary truncate">
                 {existingKey.maskedKey}
               </code>
             </div>
             <button
               onClick={() => handleTest(provider.id)}
               disabled={isTesting}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shrink-0"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-content-secondary hover:text-content-primary hover:bg-surface-subtle transition-colors shrink-0"
             >
               {isTesting ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -313,18 +354,18 @@ export function SettingsModal() {
               placeholder={existingKey ? '输入新 Key 替换...' : '粘贴 API Key...'}
               className={cn(
                 'w-full rounded-lg border px-2.5 py-1.5 pr-8 text-xs',
-                'border-zinc-200/60 dark:border-zinc-700/60',
-                'bg-white dark:bg-zinc-800/60',
-                'text-zinc-900 dark:text-zinc-100',
-                'placeholder:text-zinc-400 dark:placeholder:text-zinc-500',
-                'focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10',
-                'focus:border-zinc-400 dark:focus:border-zinc-600'
+                'border-line/60',
+                'bg-surface',
+                'text-content-primary',
+                'placeholder:text-content-muted',
+                'focus:outline-none focus:ring-2 focus:ring-line-strong/30',
+                'focus:border-line-strong'
               )}
             />
             <button
               type="button"
               onClick={() => setShowPassword((s) => ({ ...s, [provider.id]: !s[provider.id] }))}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-content-muted hover:text-content-primary transition-colors"
               tabIndex={-1}
             >
               {isPasswordVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -336,8 +377,8 @@ export function SettingsModal() {
             className={cn(
               'px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 shrink-0',
               draft.trim() && !isSaving
-                ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-[0.97]'
-                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed'
+                ? 'bg-accent text-accent-foreground hover:bg-accent-hover active:scale-[0.97]'
+                : 'bg-surface-muted text-content-muted cursor-not-allowed'
             )}
           >
             {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
@@ -351,7 +392,7 @@ export function SettingsModal() {
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+            className="inline-flex items-center gap-1 text-[11px] text-content-muted hover:text-content-primary transition-colors"
           >
             <ExternalLink className="w-3 h-3" />
             获取 Key
@@ -370,9 +411,9 @@ export function SettingsModal() {
       />
 
       {/* Modal card */}
-      <div className="relative w-full max-w-lg max-h-[85vh] flex flex-col rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl shadow-2xl">
+      <div className="relative w-[42rem] max-w-[calc(100vw-2rem)] h-[36rem] max-h-[calc(100vh-2rem)] flex flex-col rounded-xl border border-line/60 bg-surface-glass backdrop-blur-xl shadow-2xl">
         {/* Header with macOS red dot */}
-        <div className="relative flex items-center px-4 pt-3 pb-2.5 border-b border-zinc-200/60 dark:border-zinc-800/60 shrink-0">
+        <div className="relative flex items-center px-4 pt-3 pb-2.5 border-b border-line/60 shrink-0">
           <button
             onClick={() => setSettingsOpen(false)}
             className="w-3 h-3 rounded-full bg-red-500 hover:bg-red-600 transition-colors group flex items-center justify-center shrink-0 mr-3"
@@ -382,87 +423,144 @@ export function SettingsModal() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">设置</h2>
-          <kbd className="ml-auto text-[10px] text-zinc-400 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 font-mono">ESC</kbd>
+          <h2 className="text-sm font-semibold text-content-primary">设置</h2>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3">
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-5 h-5 animate-spin text-zinc-400" />
-            </div>
-          ) : (
-            <>
-              {/* Toast message */}
-              {message && (
-                <div
-                  className={cn(
-                    'mb-3 px-3 py-2 rounded-lg text-xs flex items-center gap-2',
-                    message.type === 'success'
-                      ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200/60 dark:border-green-800/60'
-                      : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200/60 dark:border-red-800/60'
-                  )}
-                >
-                  {message.type === 'success' ? (
-                    <CheckCircle className="w-4 h-4 shrink-0" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                  )}
-                  {message.text}
-                </div>
-              )}
-
-              {/* Provider cards */}
-              <div className="space-y-2">
-                {providers.map(renderProviderCard)}
-              </div>
-
-              {/* 记忆管理 */}
-              <div className="mt-4 rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 bg-white/60 dark:bg-zinc-900/40 px-3.5 py-3 space-y-2.5">
-                {/* Header */}
+        {/* Body: sidebar nav + content */}
+        <div className="flex-1 min-h-0 flex">
+          {/* Sidebar */}
+          <nav className="m-2 mr-0 w-44 shrink-0 rounded-xl border border-line/60 bg-surface-muted/50 p-1.5 space-y-0.5 overflow-y-auto">
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon
+              const active = activeSection === item.id
+              return (
                 <button
-                  onClick={() => setMemorySectionExpanded(!memorySectionExpanded)}
-                  className="w-full flex items-center gap-2.5 text-left"
+                  key={item.id}
+                  onClick={() => setActiveSection(item.id)}
+                  className={cn(
+                    'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[13px] font-medium text-left transition-colors',
+                    active
+                      ? 'bg-accent text-accent-foreground'
+                      : 'text-content-secondary hover:bg-surface-subtle/60'
+                  )}
                 >
-                  <Brain className="w-4 h-4 text-zinc-400 shrink-0" />
-                  <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200 flex-1 truncate">
-                    跨对话记忆
-                  </span>
-                  <span className="text-[11px] text-zinc-400 shrink-0">{memories.length} 条</span>
-                  <ChevronDown className={cn('w-3.5 h-3.5 text-zinc-400 shrink-0 transition-transform', memorySectionExpanded && 'rotate-180')} />
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span className="flex-1 truncate">{item.label}</span>
+                  {item.id === 'providers' && keys.length > 0 && (
+                    <span className={cn(
+                      'text-[10px] px-1.5 py-0.5 rounded-full font-mono shrink-0',
+                      active
+                        ? 'bg-accent-foreground/20'
+                        : 'bg-surface-subtle/80 text-content-muted'
+                    )}>
+                      {keys.length}
+                    </span>
+                  )}
+                  {item.id === 'memory' && memories.length > 0 && (
+                    <span className={cn(
+                      'text-[10px] px-1.5 py-0.5 rounded-full font-mono shrink-0',
+                      active
+                        ? 'bg-accent-foreground/20'
+                        : 'bg-surface-subtle/80 text-content-muted'
+                    )}>
+                      {memories.length}
+                    </span>
+                  )}
                 </button>
+              )
+            })}
+          </nav>
 
-                {/* 开关 */}
-                <div className="flex items-center justify-between gap-3 pt-2 border-t border-zinc-200/40 dark:border-zinc-800/40">
-                  <div className="text-left min-w-0">
-                    <p className="text-xs text-zinc-700 dark:text-zinc-300">记忆功能</p>
-                    <p className="text-[11px] text-zinc-400 truncate">换新对话时 AI 仍记得关于你的信息</p>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={memoryEnabled}
-                    onClick={() => handleToggleMemory(!memoryEnabled)}
+          {/* Content */}
+          <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-4 py-3">
+            {loading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="w-5 h-5 animate-spin text-content-muted" />
+              </div>
+            ) : (
+              <>
+                {/* Toast message */}
+                {message && (
+                  <div
                     className={cn(
-                      'relative w-9 h-5 rounded-full transition-colors shrink-0',
-                      memoryEnabled ? 'bg-zinc-900 dark:bg-zinc-50' : 'bg-zinc-200 dark:bg-zinc-700'
+                      'mb-3 px-3 py-2 rounded-lg text-xs flex items-center gap-2',
+                      message.type === 'success'
+                        ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200/60 dark:border-green-800/60'
+                        : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200/60 dark:border-red-800/60'
                     )}
                   >
-                    <span
-                      className={cn(
-                        'absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white dark:bg-zinc-900 transition-transform',
-                        memoryEnabled && 'translate-x-4'
-                      )}
-                    />
-                  </button>
-                </div>
+                    {message.type === 'success' ? (
+                      <CheckCircle className="w-4 h-4 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                    )}
+                    {message.text}
+                  </div>
+                )}
 
-                {/* 展开内容 */}
-                {memorySectionExpanded && (
-                  <div className="space-y-2.5">
+                {/* Section title */}
+                <h3 className="text-sm font-semibold text-content-primary mb-2.5 text-left">
+                  {sectionTitle}
+                </h3>
+
+                {/* 服务商 */}
+                {activeSection === 'providers' && (
+                  <div className="space-y-3">
+                    {configured.length > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5 px-0.5">
+                          <span className="text-[11px] font-medium text-content-secondary">已配置</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-mono">
+                            {configured.length}
+                          </span>
+                        </div>
+                        {configured.map(renderProviderCard)}
+                      </div>
+                    )}
+                    {unconfigured.length > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5 px-0.5">
+                          <span className="text-[11px] font-medium text-content-secondary">待配置</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface-subtle/80 text-content-muted font-mono">
+                            {unconfigured.length}
+                          </span>
+                        </div>
+                        {unconfigured.map(renderProviderCard)}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 记忆 */}
+                {activeSection === 'memory' && (
+                  <div className="rounded-xl border border-line/60 bg-surface/60 px-3.5 py-3 space-y-2.5">
+                    {/* 开关 */}
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-left min-w-0">
+                        <p className="text-xs text-content-secondary">记忆功能</p>
+                        <p className="text-[11px] text-content-muted truncate">换新对话时 AI 仍记得关于你的信息</p>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={memoryEnabled}
+                        onClick={() => handleToggleMemory(!memoryEnabled)}
+                        className={cn(
+                          'relative w-9 h-5 rounded-full transition-colors shrink-0',
+                          memoryEnabled ? 'bg-accent' : 'bg-surface-subtle'
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            'absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white dark:bg-surface transition-transform',
+                            memoryEnabled && 'translate-x-4'
+                          )}
+                        />
+                      </button>
+                    </div>
+
                     {/* 手动添加 */}
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 pt-2 border-t border-line/40">
                       <input
                         type="text"
                         value={memoryDraft}
@@ -476,12 +574,12 @@ export function SettingsModal() {
                         placeholder="手动添加一条记忆，如：用户喜欢简洁的设计"
                         className={cn(
                           'flex-1 min-w-0 rounded-lg border px-2.5 py-1.5 text-xs',
-                          'border-zinc-200/60 dark:border-zinc-700/60',
-                          'bg-white dark:bg-zinc-800/60',
-                          'text-zinc-900 dark:text-zinc-100',
-                          'placeholder:text-zinc-400 dark:placeholder:text-zinc-500',
-                          'focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10',
-                          'focus:border-zinc-400 dark:focus:border-zinc-600'
+                          'border-line/60',
+                          'bg-surface',
+                          'text-content-primary',
+                          'placeholder:text-content-muted',
+                          'focus:outline-none focus:ring-2 focus:ring-line-strong/30',
+                          'focus:border-line-strong'
                         )}
                       />
                       <button
@@ -490,8 +588,8 @@ export function SettingsModal() {
                         className={cn(
                           'px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 shrink-0',
                           memoryDraft.trim() && !memorySaving
-                            ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-[0.97]'
-                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed'
+                            ? 'bg-accent text-accent-foreground hover:bg-accent-hover active:scale-[0.97]'
+                            : 'bg-surface-muted text-content-muted cursor-not-allowed'
                         )}
                       >
                         {memorySaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
@@ -501,7 +599,7 @@ export function SettingsModal() {
 
                     {/* 记忆列表 */}
                     {memories.length === 0 ? (
-                      <p className="text-[11px] text-zinc-400 text-left py-1">
+                      <p className="text-[11px] text-content-muted text-left py-1">
                         暂无记忆。聊天中告诉 AI 你的喜好，它会自动记下来。
                       </p>
                     ) : (
@@ -509,25 +607,25 @@ export function SettingsModal() {
                         {memories.map((m) => (
                           <li
                             key={m.id}
-                            className="flex items-start gap-2 px-2.5 py-2 rounded-lg bg-zinc-100/60 dark:bg-zinc-800/50 border border-zinc-200/40 dark:border-zinc-700/40"
+                            className="flex items-start gap-2 px-2.5 py-2 rounded-lg bg-surface-muted/60 border border-line/40"
                           >
                             <div className="flex-1 min-w-0 text-left">
                               <div className="flex items-center gap-1.5 mb-0.5">
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-200/80 dark:bg-zinc-700/80 text-zinc-500 dark:text-zinc-400 shrink-0">
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface-subtle/80 text-content-muted shrink-0">
                                   {MEMORY_CATEGORY_LABELS[m.category] ?? '其他'}
                                 </span>
                                 {m.source === 'manual' && (
-                                  <span className="text-[10px] text-zinc-400 shrink-0">手动添加</span>
+                                  <span className="text-[10px] text-content-muted shrink-0">手动添加</span>
                                 )}
                               </div>
-                              <p className="text-xs text-zinc-700 dark:text-zinc-300 break-words leading-relaxed">
+                              <p className="text-xs text-content-secondary break-words leading-relaxed">
                                 {m.content}
                               </p>
                             </div>
                             <button
                               onClick={() => handleDeleteMemory(m.id)}
                               disabled={memoryDeleting === m.id}
-                              className="shrink-0 p-1 rounded-md text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                              className="shrink-0 p-1 rounded-md text-content-muted hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
                               aria-label="删除记忆"
                             >
                               {memoryDeleting === m.id ? (
@@ -542,36 +640,114 @@ export function SettingsModal() {
                     )}
                   </div>
                 )}
-              </div>
 
-              {/* Help section */}
-              <button
-                onClick={() => setHelpExpanded(!helpExpanded)}
-                className="flex items-center gap-1.5 mt-4 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
-              >
-                <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', helpExpanded && 'rotate-180')} />
-                如何获取 API Key？
-              </button>
-              {helpExpanded && (
-                <div className="mt-2 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60">
-                  <ul className="text-[11px] space-y-1.5">
-                    {providers.map((provider) => {
-                      const url = PROVIDER_URL[provider.id]
-                      if (!url) return null
-                      return (
-                        <li key={provider.id} className="flex items-center gap-2">
-                          <span className="text-zinc-500 dark:text-zinc-400 shrink-0 min-w-[5rem]">{provider.name}</span>
-                          <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline truncate">
-                            {url.replace('https://', '')}
-                          </a>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </div>
-              )}
-            </>
-          )}
+                {/* 通用 */}
+                {activeSection === 'general' && (
+                  <div className="rounded-xl border border-line/60 bg-surface/60 px-3.5 py-3 space-y-2.5">
+                    <div className="text-left">
+                      <p className="text-xs text-content-secondary">外观</p>
+                      <p className="text-[11px] text-content-muted">选择界面明暗主题</p>
+                    </div>
+                    <div className="flex rounded-lg bg-surface-muted p-0.5 gap-0.5">
+                      {THEME_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => applyTheme(opt.value)}
+                          className={cn(
+                            'flex-1 px-2 py-1.5 rounded-md text-xs font-medium transition-colors',
+                            themeChoice === opt.value
+                              ? 'bg-accent text-accent-foreground shadow-sm'
+                              : 'text-content-muted hover:text-content-primary'
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 帮助 */}
+                {activeSection === 'help' && (
+                  <div className="space-y-2.5">
+                    <p className="text-xs text-content-secondary text-left leading-relaxed">
+                      在下方服务商官网注册并创建 API Key，然后粘贴到「服务商」分类中即可开始使用。
+                    </p>
+                    <div className="rounded-xl border border-line/60 bg-surface/60 p-3.5">
+                      <ul className="text-[11px] space-y-1.5">
+                        {providers.map((provider) => {
+                          const url = PROVIDER_URL[provider.id]
+                          if (!url) return null
+                          return (
+                            <li key={provider.id} className="flex items-center gap-2">
+                              <span className="text-content-secondary shrink-0 min-w-[5rem]">{provider.name}</span>
+                              <a href={url} target="_blank" rel="noopener noreferrer" className="text-content-primary hover:underline truncate">
+                                {url.replace('https://', '')}
+                              </a>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {/* 关于 */}
+                {activeSection === 'about' && (
+                  <div className="space-y-2.5">
+                    {/* App identity */}
+                    <div className="rounded-xl border border-line/60 bg-surface/60 px-3.5 py-4 flex flex-col items-center gap-2">
+                      <div className="w-12 h-12 rounded-xl bg-accent flex items-center justify-center">
+                        <MessageSquare className="w-6 h-6 text-accent-foreground" />
+                      </div>
+                      <p className="text-sm font-semibold text-content-primary">八号产房</p>
+                      <p className="text-[11px] text-content-muted">AI 多模型对话助手 · v0.1.0</p>
+                    </div>
+
+                    {/* Info rows */}
+                    <div className="rounded-xl border border-line/60 bg-surface/60 px-3.5 py-2.5 divide-y divide-line/40">
+                      <div className="flex items-center justify-between gap-3 py-2">
+                        <span className="text-xs text-content-secondary shrink-0">版本</span>
+                        <span className="text-xs text-content-primary text-right">0.1.0</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 py-2">
+                        <span className="text-xs text-content-secondary shrink-0">技术栈</span>
+                        <span className="text-xs text-content-primary text-right">Next.js · Prisma · NextAuth</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 py-2">
+                        <span className="text-xs text-content-secondary shrink-0">数据存储</span>
+                        <span className="text-xs text-content-primary text-right">本地 SQLite / Turso</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 py-2">
+                        <span className="text-xs text-content-secondary shrink-0">部署平台</span>
+                        <span className="text-xs text-content-primary text-right">Vercel</span>
+                      </div>
+                    </div>
+
+                    {/* GitHub */}
+                    <a
+                      href="https://github.com/molinglong"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-line/60 bg-surface/60 text-xs text-content-primary hover:border-line-strong transition-colors"
+                    >
+                      <GitBranch className="w-4 h-4 text-content-muted shrink-0" />
+                      GitHub · molinglong
+                      <ExternalLink className="w-3 h-3 text-content-muted ml-auto shrink-0" />
+                    </a>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Footer status bar */}
+        <div className="shrink-0 px-4 py-2 border-t border-line/60 flex items-center gap-2">
+          <span className="text-[10px] text-content-muted">
+            {keys.length} 个服务商已配置 · {memories.length} 条记忆
+          </span>
+          <kbd className="ml-auto text-[10px] text-content-muted px-1.5 py-0.5 rounded border border-line bg-surface-muted font-mono">ESC</kbd>
         </div>
       </div>
     </div>

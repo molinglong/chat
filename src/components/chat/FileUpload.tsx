@@ -157,20 +157,20 @@ export function FileUpload({ attachments, onAttachmentsChange, disabled }: FileU
               key={att.url + idx}
               className={cn(
                 'relative group flex items-center gap-2 rounded-lg border',
-                'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900',
+                'border-line bg-surface-muted',
                 'px-2 py-1.5 max-w-[180px]'
               )}
             >
               {att.type.startsWith('image/') ? (
-                <ImageIcon className="w-4 h-4 text-zinc-500 shrink-0" />
+                <ImageIcon className="w-4 h-4 text-content-secondary shrink-0" />
               ) : (
-                <FileText className="w-4 h-4 text-zinc-400 shrink-0" />
+                <FileText className="w-4 h-4 text-content-muted shrink-0" />
               )}
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-zinc-700 dark:text-zinc-300 truncate">
+                <p className="text-xs text-content-primary truncate">
                   {att.name}
                 </p>
-                <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                <p className="text-[10px] text-content-muted">
                   {formatSize(att.size)}
                 </p>
               </div>
@@ -195,16 +195,16 @@ export function FileUpload({ attachments, onAttachmentsChange, disabled }: FileU
                 'flex items-center gap-2 rounded-lg border px-2 py-1.5 max-w-[180px]',
                 u.status === 'error'
                   ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30'
-                  : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900'
+                  : 'border-line bg-surface-muted'
               )}
             >
-              <Upload className={cn('w-4 h-4 shrink-0', u.status === 'error' ? 'text-red-400' : 'text-zinc-400 animate-pulse')} />
+              <Upload className={cn('w-4 h-4 shrink-0', u.status === 'error' ? 'text-red-400' : 'text-content-muted animate-pulse')} />
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-zinc-700 dark:text-zinc-300 truncate">{u.name}</p>
+                <p className="text-xs text-content-primary truncate">{u.name}</p>
                 {u.status === 'uploading' && (
-                  <div className="mt-0.5 w-full h-1 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+                  <div className="mt-0.5 w-full h-1 rounded-full bg-surface-subtle overflow-hidden">
                     <div
-                      className="h-full bg-zinc-900 dark:bg-zinc-50 rounded-full transition-all duration-200"
+                      className="h-full bg-accent rounded-full transition-all duration-200"
                       style={{ width: `${u.progress}%` }}
                     />
                   </div>
@@ -225,27 +225,27 @@ export function FileUpload({ attachments, onAttachmentsChange, disabled }: FileU
         onDrop={handleDrop}
         className={cn(
           'relative',
-          dragging && 'ring-2 ring-zinc-400 rounded-lg bg-zinc-50/50 dark:bg-zinc-900/20'
+          dragging && 'ring-2 ring-line-strong rounded-lg bg-surface-muted/50'
         )}
       >
         <button
           onClick={() => inputRef.current?.click()}
           disabled={disabled}
           className={cn(
-            'p-2 rounded-full transition-colors',
-            'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300',
-            'hover:bg-zinc-100 dark:hover:bg-zinc-800',
+            'h-7 w-7 flex items-center justify-center rounded-full transition-colors',
+            'text-content-muted hover:text-content-primary',
+            'hover:bg-surface-subtle',
             'disabled:opacity-50 disabled:cursor-not-allowed'
           )}
           aria-label="添加附件"
           title="添加附件 (图片、PDF、文本文件, 最大10MB)"
         >
-          <Paperclip className="w-4 h-4" />
+          <Paperclip className="w-3.5 h-3.5" />
         </button>
 
         {dragging && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <p className="text-sm text-zinc-600 dark:text-zinc-400 font-medium">松开以上传文件</p>
+            <p className="text-sm text-content-secondary font-medium">松开以上传文件</p>
           </div>
         )}
       </div>

@@ -124,10 +124,45 @@ export function ChatPanel({
     },
   })
 
+  // Ref to setMessages,避免在 useChat 初始化器内部自引用导致循环依赖
+  const setMessagesRef = useRef<((updater: UIMessage[] | ((prev: UIMessage[]) => UIMessage[])) => void) | null>(null)
+
   const { messages, sendMessage, setMessages, stop, status, error, clearError, regenerate } = useChat<UIMessage>({
     transport,
     messages: initialMessages,
+    onFinish: async ({ message, isError, isAbort }) => {
+      if (isError || isAbort) return
+      const convId = conversationIdRef.current
+      if (!convId) return
+      try {
+        // 服务端在 finish 事件之前已完成生图与入库(onFinish 先于 finish part 发送),
+        // 这里拉取最新的助手消息,把含图片的最终内容同步到界面。
+        const res = await fetch(`/api/conversations/${convId}/messages?limit=1`)
+        if (!res.ok) return
+        const data = await res.json()
+        const latest = data.messages?.[0]
+        if (!latest || latest.role !== "assistant" || typeof latest.content !== "string") return
+        setMessagesRef.current?.((prev: UIMessage[]) =>
+          prev.map((m) => {
+            if (m.id !== message.id) return m
+            const reasoningParts = m.parts.filter((p) => p.type === "reasoning")
+            return {
+              ...m,
+              parts: [
+                ...reasoningParts,
+                { type: "text" as const, text: latest.content, state: "done" as const },
+              ],
+            }
+          })
+        )
+      } catch (err) {
+        console.error("Failed to sync final message content:", err)
+      }
+    },
   })
+
+  // Keep ref in sync with latest setMessages
+  setMessagesRef.current = setMessages
 
   const isLoading = status === 'submitted' || status === 'streaming'
 
@@ -224,9 +259,9 @@ export function ChatPanel({
               <button
                 onClick={handleRetry}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                  bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900
-                  hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors
-                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/50"
+                  bg-accent text-accent-foreground
+                  hover:bg-accent-hover transition-colors
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 重试
@@ -235,9 +270,9 @@ export function ChatPanel({
                 <Link
                   href="/chat/settings"
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                    bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300
-                    hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors
-                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/50"
+                    bg-surface-muted text-content-secondary
+                    hover:bg-surface-subtle transition-colors
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong"
                 >
                   <SettingsIcon className="w-3.5 h-3.5" />
                   前往设置

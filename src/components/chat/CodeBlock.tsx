@@ -17,19 +17,19 @@ function MacHeader({ language, copied, onCopy }: {
   onCopy: () => void
 }) {
   return (
-    <div className="flex items-center justify-between px-4 py-2 bg-[#f6f6f6] dark:bg-[#2d2d2d] border-b border-[#e5e5e5] dark:border-[#3d3d3d]">
+    <div className="flex items-center justify-between px-4 py-2 bg-code-header border-b border-line">
       {/* Traffic light dots */}
       <div className="flex items-center gap-1.5">
         <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57] border border-[#e0443e]" />
         <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e] border border-[#dea123]" />
         <span className="w-2.5 h-2.5 rounded-full bg-[#28c840] border border-[#1eaa33]" />
       </div>
-      <span className="text-[11px] text-[#999] dark:text-[#808080] font-mono select-none">
+      <span className="text-[11px] text-content-muted font-mono select-none">
         {language || 'code'}
       </span>
       <button
         onClick={onCopy}
-        className="flex items-center gap-1 text-[11px] text-[#999] dark:text-[#808080] hover:text-[#333] dark:hover:text-[#ccc] transition-colors"
+        className="flex items-center gap-1 text-[11px] text-content-muted hover:text-content-primary transition-colors"
         aria-label="复制代码"
       >
         {copied ? (
@@ -53,15 +53,15 @@ function PlainCodeBlock({ language, code, className }: CodeBlockProps) {
   const [copied, setCopied] = useState(false)
 
   return (
-    <div className={cn('relative group rounded-lg overflow-hidden my-3 border border-[#e5e5e5] dark:border-[#3d3d3d]', className)}>
+    <div className={cn('relative group rounded-lg overflow-hidden my-3 border border-line', className)}>
       <MacHeader language={language || 'code'} copied={copied} onCopy={() => {
         navigator.clipboard.writeText(code).then(() => {
           setCopied(true)
           setTimeout(() => setCopied(false), 2000)
         })
       }} />
-      <pre className="p-4 overflow-x-auto bg-[#fafafa] dark:bg-[#1e1e1e] text-sm leading-relaxed">
-        <code className="text-[#333] dark:text-[#ccc] font-mono">{code}</code>
+      <pre className="p-4 overflow-x-auto bg-code-bg text-sm leading-relaxed">
+        <code className="text-content-primary font-mono">{code}</code>
       </pre>
     </div>
   )
@@ -111,10 +111,10 @@ export function CodeBlock({ language, code, className }: CodeBlockProps) {
 
   if (isHighlighted && highlighted) {
     return (
-      <div className={cn('relative group rounded-lg overflow-hidden my-3 border border-[#e5e5e5] dark:border-[#3d3d3d]', className)}>
+      <div className={cn('relative group rounded-lg overflow-hidden my-3 border border-line', className)}>
         <MacHeader language={language || 'code'} copied={copied} onCopy={handleCopy} />
         <div
-          className="p-4 overflow-x-auto bg-[#fafafa] dark:bg-[#1e1e1e] text-sm leading-relaxed [&>pre]:!bg-transparent [&>pre]:!m-0 [&>pre]:!p-0"
+          className="p-4 overflow-x-auto bg-code-bg text-sm leading-relaxed [&>pre]:!bg-transparent [&>pre]:!m-0 [&>pre]:!p-0"
           dangerouslySetInnerHTML={{ __html: highlighted }}
         />
       </div>

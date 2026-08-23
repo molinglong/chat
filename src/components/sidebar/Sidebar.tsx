@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { Plus, Settings, X } from 'lucide-react'
 import { useChatStore } from '@/store/chat-store'
 import { cn } from '@/lib/utils'
@@ -19,6 +19,7 @@ export function Sidebar() {
   const [conversations, setConversations] = useState<ConversationData[]>([])
   const [loading, setLoading] = useState(true)
   const router = useRouter()
+  const pathname = usePathname()
 
   const fetchConversations = useCallback(async () => {
     try {
@@ -39,9 +40,18 @@ export function Sidebar() {
     fetchConversations()
   }, [currentConversationId, fetchConversations])
 
-  async function handleNewConversation() {
-    router.push('/chat')
+  function handleNewConversation() {
     setSidebarOpen(false)
+    // If the router still thinks we're on /chat (the URL may have been rewritten
+    // to /chat/c/[id] via history.replaceState after the first message), pushing
+    // the same route is a no-op and the panel won't reset. Hard-navigate instead.
+    if (pathname === '/chat') {
+      if (window.location.pathname !== '/chat') {
+        window.location.href = '/chat'
+      }
+      return
+    }
+    router.push('/chat')
   }
 
   async function handleDeleteConversation(id: string) {
@@ -87,8 +97,8 @@ export function Sidebar() {
       <aside
         className={cn(
           'fixed top-1.5 bottom-1.5 left-1.5 z-50 w-56 flex flex-col',
-          'bg-zinc-50/80 dark:bg-zinc-950/80 backdrop-blur-xl text-zinc-900 dark:text-zinc-100',
-          'rounded-xl border border-zinc-200/50 dark:border-zinc-800/50 overflow-hidden',
+          'bg-surface-glass backdrop-blur-xl text-content-primary',
+          'rounded-xl border border-line/50 overflow-hidden',
           'transition-transform duration-300 ease-in-out',
           'lg:static lg:z-auto lg:inset-auto lg:translate-x-0 lg:m-1.5',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
@@ -99,7 +109,7 @@ export function Sidebar() {
           <h1 className="text-base font-semibold tracking-tight">八号产房</h1>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="p-1 rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-800 lg:hidden transition-colors"
+            className="p-1 rounded-md hover:bg-surface-subtle lg:hidden transition-colors"
             aria-label="关闭侧边栏"
           >
             <X className="w-3.5 h-3.5" />
@@ -111,8 +121,8 @@ export function Sidebar() {
           <button
             onClick={handleNewConversation}
             className="w-full flex items-center justify-start gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium
-              bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900
-              hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
+              bg-accent text-accent-foreground
+              hover:bg-accent-hover transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
             新对话
@@ -123,11 +133,11 @@ export function Sidebar() {
         <div className="flex-1 overflow-y-auto px-1.5 pt-2">
           <nav className="space-y-0.5">
             {loading ? (
-              <div className="px-3 py-6 text-center text-zinc-400 text-xs">
+              <div className="px-3 py-6 text-center text-content-muted text-xs">
                 加载中...
               </div>
             ) : conversations.length === 0 ? (
-              <div className="px-3 py-6 text-center text-zinc-400 text-xs">
+              <div className="px-3 py-6 text-center text-content-muted text-xs">
                 暂无对话记录
               </div>
             ) : (
@@ -148,7 +158,7 @@ export function Sidebar() {
         <div className="px-2 pt-1 pb-2 flex items-center gap-1">
           <button
             onClick={() => { setSettingsOpen(true); setSidebarOpen(false) }}
-            className="flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/60 dark:hover:bg-zinc-800/60 transition-colors"
+            className="flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm text-content-secondary hover:text-content-primary hover:bg-surface-subtle/60 transition-colors"
           >
             <Settings className="w-3.5 h-3.5" />
             设置

@@ -16,10 +16,10 @@ export default async function ChatLayout({
   }
 
   return (
-    <div className="h-screen bg-zinc-100 dark:bg-black p-0 lg:p-1.5 overflow-hidden">
-      <div className="h-full flex overflow-hidden rounded-none lg:rounded-xl shadow-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+    <div className="h-screen bg-surface-muted p-0 lg:p-1.5 overflow-hidden">
+      <div className="h-full flex overflow-hidden rounded-none lg:rounded-xl shadow-2xl border border-line bg-surface">
         <Sidebar />
-        <div className="flex flex-col flex-1 min-w-0 bg-white dark:bg-zinc-950">
+        <div className="flex flex-col flex-1 min-w-0 bg-surface">
           <TopBar />
           <main className="flex-1 overflow-hidden">
             {children}

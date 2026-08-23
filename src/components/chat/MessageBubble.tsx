@@ -121,7 +121,7 @@ export function MessageBubble({
     return (
       <div className="flex justify-end px-4 py-2">
         <div className="max-w-[80%] w-full">
-          <div className="rounded-lg bg-zinc-900 dark:bg-zinc-100 rounded-br-sm overflow-hidden">
+          <div className="rounded-lg bg-accent rounded-br-sm overflow-hidden">
             <textarea
               ref={textareaRef}
               value={editValue}
@@ -135,13 +135,13 @@ export function MessageBubble({
               onKeyDown={handleEditKeyDown}
               onBlur={commitEdit}
               rows={1}
-              className="w-full resize-none bg-transparent text-sm leading-relaxed text-white dark:text-zinc-900 outline-none px-3 py-1.5 min-h-[24px] max-h-[200px]"
+              className="w-full resize-none bg-transparent text-sm leading-relaxed text-accent-foreground outline-none px-3 py-1.5 min-h-[24px] max-h-[200px]"
             />
           </div>
           <div className="flex items-center justify-end gap-1 mt-1">
             <button
               onMouseDown={(e) => { e.preventDefault(); cancelEditing() }}
-              className="p-1 rounded-md text-zinc-400 hover:text-red-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              className="p-1 rounded-md text-content-muted hover:text-red-500 hover:bg-surface-subtle transition-colors"
               title="取消"
               aria-label="取消"
             >
@@ -149,7 +149,7 @@ export function MessageBubble({
             </button>
             <button
               onMouseDown={(e) => { e.preventDefault(); commitEdit() }}
-              className="p-1 rounded-md text-zinc-400 hover:text-green-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              className="p-1 rounded-md text-content-muted hover:text-green-500 hover:bg-surface-subtle transition-colors"
               title="确认"
               aria-label="确认"
             >
@@ -165,7 +165,7 @@ export function MessageBubble({
     <div className={cn('flex gap-2.5 px-4 py-2', isUser ? 'justify-end' : 'justify-start')}>
       {/* Avatar - only for AI */}
       {!isUser && (
-        <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 mt-0.5">
+        <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center bg-accent text-accent-foreground mt-0.5">
           <Bot className="w-3 h-3" />
         </div>
       )}
@@ -179,18 +179,18 @@ export function MessageBubble({
               <div className="mb-2">
                 <button
                   onClick={() => setShowReasoning(!showReasoning)}
-                  className="flex items-center gap-1.5 text-[11px] font-medium text-indigo-500 dark:text-indigo-400 hover:opacity-80 transition-opacity"
+                  className="flex items-center gap-1.5 text-[11px] font-medium text-content-secondary hover:opacity-80 transition-opacity"
                 >
                   <Brain className="w-3 h-3" />
                   <span>思考过程</span>
                   <ChevronDown className={cn('w-3 h-3 transition-transform', showReasoning ? '' : '-rotate-90')} />
                 </button>
                 {showReasoning && (
-                  <div className="mt-1.5 pl-3 border-l-2 border-indigo-200 dark:border-indigo-800/50">
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 whitespace-pre-wrap break-words leading-relaxed">
+                  <div className="mt-1.5 pl-3 border-l-2 border-line-strong/60">
+                    <p className="text-xs text-content-secondary whitespace-pre-wrap break-words leading-relaxed">
                       {reasoningText}
                       {isReasoningStreaming && (
-                        <span className="inline-block w-1 h-3 ml-0.5 bg-indigo-400 dark:bg-indigo-500 animate-pulse align-middle" />
+                        <span className="inline-block w-1 h-3 ml-0.5 bg-accent animate-pulse align-middle" />
                       )}
                     </p>
                   </div>
@@ -199,28 +199,28 @@ export function MessageBubble({
             )}
             {/* Main response */}
             {displayText ? (
-              <div className="relative text-sm text-zinc-800 dark:text-zinc-100 leading-relaxed">
+              <div className="relative text-sm text-content-primary leading-relaxed">
                 <MarkdownRenderer content={displayText} />
                 {showCursor && (
-                  <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-zinc-600 dark:bg-zinc-400 animate-pulse align-middle" />
+                  <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-content-secondary animate-pulse align-middle" />
                 )}
               </div>
             ) : isWaitingForReasoning ? (
               <div className="flex items-center gap-1.5 py-1">
-                <Brain className="w-3 h-3 text-indigo-400 dark:text-indigo-500 animate-pulse" />
-                <span className="text-xs text-zinc-400 dark:text-zinc-500">思考中...</span>
+                <Brain className="w-3 h-3 text-content-secondary animate-pulse" />
+                <span className="text-xs text-content-muted">思考中...</span>
               </div>
             ) : isCurrentlyStreaming ? (
               <div className="flex items-center gap-1.5 py-1">
-                <span className="w-2 h-2 bg-zinc-400 dark:bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-2 h-2 bg-zinc-400 dark:bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-2 h-2 bg-zinc-400 dark:bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                <span className="w-2 h-2 bg-content-muted rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2 h-2 bg-content-muted rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-2 h-2 bg-content-muted rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             ) : null}
           </>
         ) : (
-          <div className="rounded-lg bg-zinc-900 dark:bg-zinc-100 px-3 py-1.5 rounded-br-sm">
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-white dark:text-zinc-900">{text}</p>
+          <div className="rounded-lg bg-accent px-3 py-1.5 rounded-br-sm">
+            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-accent-foreground">{text}</p>
           </div>
         )}
 
@@ -229,7 +229,7 @@ export function MessageBubble({
           <div className={cn('flex items-center gap-0.5 mt-1', isUser ? 'justify-end' : 'justify-start')}>
             <button
               onClick={handleCopy}
-              className="p-1 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              className="p-1 rounded-md text-content-muted hover:text-content-primary hover:bg-surface-subtle transition-colors"
               title="复制"
               aria-label="复制"
             >
@@ -238,7 +238,7 @@ export function MessageBubble({
             {isAssistant && isLastAssistant && canRegenerate && onRegenerate && (
               <button
                 onClick={onRegenerate}
-                className="p-1 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                className="p-1 rounded-md text-content-muted hover:text-content-primary hover:bg-surface-subtle transition-colors"
                 title="重新生成"
                 aria-label="重新生成"
               >
@@ -248,7 +248,7 @@ export function MessageBubble({
             {isUser && canEdit && onEdit && (
               <button
                 onClick={startEditing}
-                className="p-1 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                className="p-1 rounded-md text-content-muted hover:text-content-primary hover:bg-surface-subtle transition-colors"
                 title="编辑"
                 aria-label="编辑"
               >

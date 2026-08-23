@@ -114,8 +114,8 @@ export function ModelSelector({
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
           compact
-            ? 'flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400'
-            : 'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300',
+            ? 'flex items-center h-7 px-2.5 rounded-full text-[11px] font-medium bg-surface-muted hover:bg-surface-subtle text-content-secondary'
+            : 'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-surface-subtle text-content-secondary',
           'transition-colors'
         )}
       >
@@ -129,16 +129,16 @@ export function ModelSelector({
               ? 'absolute bottom-full left-0 mb-1 z-50'
               : 'absolute top-full left-0 mt-1 z-50',
             'min-w-[180px] max-h-[260px] overflow-y-auto',
-            'bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl rounded-lg shadow-lg',
-            'border border-zinc-200/60 dark:border-zinc-800/60',
+            'bg-surface-glass backdrop-blur-xl rounded-lg shadow-lg',
+            'border border-line/60',
             'py-1'
           )}
         >
           {Object.keys(grouped).length > 0 ? (
             Object.entries(grouped).map(([providerId, { providerName, models: providerModels }]) => (
               <div key={providerId}>
-                <div className="flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
-                  <span className={cn('w-1.5 h-1.5 rounded-full', PROVIDER_DOT[providerId] ?? 'bg-zinc-500')} />
+                <div className="flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-semibold text-content-muted uppercase tracking-wider">
+                  <span className={cn('w-1.5 h-1.5 rounded-full', PROVIDER_DOT[providerId] ?? 'bg-content-muted')} />
                   {providerName}
                 </div>
                 {providerModels.map((model) => (
@@ -150,22 +150,22 @@ export function ModelSelector({
                     }}
                     className={cn(
                       'w-full text-left px-2 py-1 text-xs transition-colors',
-                      'hover:bg-zinc-100 dark:hover:bg-zinc-800',
+                      'hover:bg-surface-subtle',
                       model.id === selectedModel
-                        ? 'text-zinc-900 dark:text-zinc-50 font-medium bg-zinc-100 dark:bg-zinc-800'
-                        : 'text-zinc-700 dark:text-zinc-300'
+                        ? 'text-content-primary font-medium bg-accent-soft'
+                        : 'text-content-secondary'
                     )}
                   >
                     <div className="flex items-center justify-between">
                       <span>{model.name}</span>
                       <div className="flex items-center gap-1">
                         {model.supportsReasoning && (
-                          <span className="text-[9px] px-1 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-500 dark:text-indigo-300">
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-accent-soft text-content-secondary">
                             Reasoning
                           </span>
                         )}
                         {model.supportsVision && (
-                          <span className="text-[9px] px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-surface-muted text-content-muted">
                             Vision
                           </span>
                         )}
@@ -176,7 +176,7 @@ export function ModelSelector({
               </div>
             ))
           ) : (
-            <div className="px-3 py-4 text-center text-xs text-zinc-400">
+            <div className="px-3 py-4 text-center text-xs text-content-muted">
               请先在设置中配置 API Key
             </div>
           )}
