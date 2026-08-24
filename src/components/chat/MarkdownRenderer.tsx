@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -8,9 +8,11 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { CodeBlock } from './CodeBlock'
 import { cn } from '@/lib/utils'
+import { useChatStore } from '@/store/chat-store'
 
 const MermaidBlock = dynamic(() => import('./MermaidBlock').then(m => m.MermaidBlock), { ssr: false })
 const ChartBlock = dynamic(() => import('./ChartBlock').then(m => m.ChartBlock), { ssr: false })
+const PreviewBlock = dynamic(() => import('./PreviewBlock').then(m => m.PreviewBlock), { ssr: false })
 import type { Components } from 'react-markdown'
 
 interface MarkdownRendererProps {
@@ -37,6 +39,11 @@ const components: Components = {
       // Route chart code blocks to ChartBlock
       if (lang === 'chart') {
         return <ChartBlock code={codeString} />
+      }
+
+      // Route preview code blocks to PreviewBlock
+      if (lang === 'preview' || lang === 'html-preview') {
+        return <PreviewBlock code={codeString} />
       }
 
       // Regular code block
@@ -172,6 +179,18 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
   content,
   className,
 }: MarkdownRendererProps) {
+  const previewCode = useChatStore(state => state.previewCode)
+  const setPreviewCode = useChatStore(state => state.setPreviewCode)
+
+  // Auto-open preview when AI finishes writing HTML/preview code
+  useEffect(() => {
+    // Check if content contains a preview code block
+    const previewMatch = content.match(/```(?:html-preview|preview)\n([\s\S]*?)```\s*$/m)
+    if (previewMatch && !previewCode) {
+      setPreviewCode(previewMatch[1].trim())
+    }
+  }, [content, previewCode, setPreviewCode])
+
   return (
     <div className={cn('prose-sm max-w-none break-words overflow-hidden text-content-primary', className)}>
       <ReactMarkdown

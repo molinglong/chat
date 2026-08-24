@@ -4,11 +4,12 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import type { UIMessage } from 'ai'
-import { AlertCircle, RefreshCw, Settings as SettingsIcon } from 'lucide-react'
+import { AlertCircle, RefreshCw, Settings as SettingsIcon, X, Eye, Plus, Minus } from 'lucide-react'
 import Link from 'next/link'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import { ComparePanel } from './ComparePanel'
+import { PreviewBlock } from './PreviewBlock'
 import { useChatStore } from '@/store/chat-store'
 import { getErrorMessage } from '@/lib/chat-errors'
 import type { ModelDefinition } from '@/lib/ai/types'
@@ -45,6 +46,23 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const [currentModel, setCurrentModel] = useState(initialModel)
   const [conversationId, setConversationId] = useState(initialConversationId)
+  
+  // Preview panel state
+  const previewCode = useChatStore(state => state.previewCode)
+  const setPreviewCode = useChatStore(state => state.setPreviewCode)
+  const isPreviewFullscreen = useChatStore(state => state.isPreviewFullscreen)
+  const setIsPreviewFullscreen = useChatStore(state => state.setIsPreviewFullscreen)
+  
+  useEffect(() => {
+    if (isPreviewFullscreen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [isPreviewFullscreen])
   
   // Auto-enable deepThink for reasoning models (like DeepSeek-R1), but allow user to toggle off
   const shouldAutoEnableDeepThink = initialModel && allModels.find(m => m.id === initialModel)?.supportsReasoning
@@ -422,6 +440,124 @@ export function ChatPanel({
         compareModeAvailable={!conversationId}
         onCompareModeChange={handleCompareModeChange}
       />
+
+      {/* Right preview panel (desktop) */}
+      {previewCode && !isPreviewFullscreen && (
+        <div className="hidden md:flex flex-col border-l border-line bg-code-bg min-w-[400px]">
+          <MacHeaderForPreview code={previewCode} onClose={() => setPreviewCode(null)} />
+        </div>
+      )}
     </div>
+    
+    {/* Mobile fullscreen preview modal */}
+    {previewCode && isPreviewFullscreen && (
+      <div className="fixed inset-0 z-50 flex flex-col bg-code-bg md:hidden">
+        <div className="flex items-center justify-between px-4 py-2 bg-code-header border-b border-line shrink-0">
+          <button
+            onClick={() => setIsPreviewFullscreen(false)}
+            className="flex items-center justify-center w-3 h-3 rounded-full bg-[#ff5f57] border border-[#e0443e] hover:brightness-90 transition-all"
+            aria-label="关闭"
+          >
+            <X className="w-2 h-2 text-[#820000] opacity-0 hover:opacity-100 transition-opacity" />
+          </button>
+          <span className="text-[11px] text-content-muted font-mono select-none">preview</span>
+          <div className="w-3" />
+        </div>
+        <iframe
+          src={`data:text/html;charset=utf-8,${encodeURIComponent(previewCode)}`}
+          className="flex-1 w-full bg-white border-0"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+        />
+      </div>
+    )}
+    
+    {/* Desktop fullscreen preview modal */}
+    {previewCode && isPreviewFullscreen && (
+      <div className="hidden md:flex fixed inset-0 z-50 flex flex-col bg-code-bg">
+        <div className="flex items-center justify-between px-4 py-2 bg-code-header border-b border-line shrink-0">
+          <button
+            onClick={() => setIsPreviewFullscreen(false)}
+            className="flex items-center justify-center w-3 h-3 rounded-full bg-[#ff5f57] border border-[#e0443e] hover:brightness-90 transition-all"
+            aria-label="关闭"
+          >
+            <X className="w-2 h-2 text-[#820000] opacity-0 hover:opacity-100 transition-opacity" />
+          </button>
+          <span className="text-[11px] text-content-muted font-mono select-none">preview</span>
+          <div className="w-3" />
+        </div>
+        <iframe
+          src={`data:text/html;charset=utf-8,${encodeURIComponent(previewCode)}`}
+          className="flex-1 w-full bg-white border-0"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+        />
+      </div>
+    )}
+  )
+}
+
+// ── Mac-style header component for preview ───────────────────────────
+function MacHeaderForPreview({ 
+  code, 
+  onClose 
+}: { 
+  code: string
+  onClose: () => void
+}) {
+  const [zoom, setZoom] = useState(1)
+  const zoomMin = 0.5
+  const zoomMax = 2
+  const zoomStep = 0.25
+
+  return (
+    <>
+      <div className="flex items-center justify-between px-4 py-2 bg-code-header border-b border-line">
+        <div className="flex items-center gap-1.5">
+          <Eye className="w-3 h-3 text-content-secondary" />
+          <span className="text-[11px] text-content-muted font-mono">HTML Preview</span>
+        </div>
+        <button
+          onClick={onClose}
+          className="shrink-0 p-1 rounded-md text-content-muted hover:text-red-500 hover:bg-surface-subtle transition-colors"
+          aria-label="关闭预览"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="flex-1 overflow-hidden bg-white">
+        <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }} className="origin-top-left">
+          <iframe
+            src={`data:text/html;charset=utf-8,${encodeURIComponent(code)}`}
+            className="w-full origin-top-left"
+            style={{ width: '100%', minHeight: '600px' }}
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+          />
+        </div>
+      </div>
+      {/* Zoom controls */}
+      <div className="flex items-center justify-center gap-3 py-3 bg-code-header border-t border-line shrink-0">
+        <button
+          onClick={() => setZoom((z) => Math.max(zoomMin, z - zoomStep))}
+          disabled={zoom <= zoomMin}
+          className="flex items-center justify-center w-7 h-7 rounded-full bg-surface border border-line-strong text-content-secondary hover:bg-surface-subtle disabled:opacity-30 disabled:cursor-default transition-colors"
+          aria-label="缩小"
+        >
+          <Minus className="w-3 h-3" />
+        </button>
+        <button
+          onClick={() => setZoom(1)}
+          className="text-[11px] text-content-secondary font-mono min-w-[3rem] text-center hover:text-content-primary transition-colors"
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <button
+          onClick={() => setZoom((z) => Math.min(zoomMax, z + zoomStep))}
+          disabled={zoom >= zoomMax}
+          className="flex items-center justify-center w-7 h-7 rounded-full bg-surface border border-line-strong text-content-secondary hover:bg-surface-subtle disabled:opacity-30 disabled:cursor-default transition-colors"
+          aria-label="放大"
+        >
+          <Plus className="w-3 h-3" />
+        </button>
+      </div>
+    </>
   )
 }
