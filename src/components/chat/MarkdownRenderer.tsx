@@ -46,8 +46,15 @@ const components: Components = {
         return <PreviewBlock code={codeString} />
       }
 
-      // Regular code block
-      return <CodeBlock language={match?.[1]} code={codeString} />
+      // Regular code block with preview button for html
+      const isHtml = lang === 'html' || lang === 'html-preview' || lang === 'preview'
+      return (
+        <CodeBlock
+          language={match?.[1]}
+          code={codeString}
+          previewCode={isHtml ? codeString : undefined}
+        />
+      )
     }
 
     // Inline code
@@ -179,18 +186,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
   content,
   className,
 }: MarkdownRendererProps) {
-  const previewCode = useChatStore(state => state.previewCode)
-  const setPreviewCode = useChatStore(state => state.setPreviewCode)
-
-  // Auto-open preview when AI finishes writing HTML/preview code
-  useEffect(() => {
-    // Check if content contains a preview code block
-    const previewMatch = content.match(/```(?:html-preview|preview)\n([\s\S]*?)```\s*$/m)
-    if (previewMatch && !previewCode) {
-      setPreviewCode(previewMatch[1].trim())
-    }
-  }, [content, previewCode, setPreviewCode])
-
+  // Note: PreviewBlock handles its own preview logic
   return (
     <div className={cn('prose-sm max-w-none break-words overflow-hidden text-content-primary', className)}>
       <ReactMarkdown
