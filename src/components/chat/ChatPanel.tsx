@@ -426,6 +426,20 @@ export function ChatPanel({
         />
       </div>
 
+      {/* Input area - fixed at bottom */}
+      <ChatInput
+        onSend={handleSend}
+        onStop={handleStop}
+        isLoading={isLoading}
+        models={mergedModels}
+        selectedModel={currentModel}
+        onModelChange={handleModelChange}
+        deepThink={deepThink}
+        onDeepThinkChange={handleDeepThinkChange}
+        compareMode={false}
+        compareModeAvailable={!conversationId}
+        onCompareModeChange={handleCompareModeChange}
+      />
 
       {/* Right preview panel (desktop) */}
       {previewCode && !isPreviewFullscreen && (
@@ -435,7 +449,7 @@ export function ChatPanel({
       )}
     </div>
     
-    {/* Mobile fullscreen preview modal */}
+    {/* Mobile fullscreen preview modal - outside main container */}
     {previewCode && isPreviewFullscreen && (
       <div className="fixed inset-0 z-50 flex flex-col bg-code-bg md:hidden">
         <div className="flex items-center justify-between px-4 py-2 bg-code-header border-b border-line shrink-0">
@@ -457,7 +471,7 @@ export function ChatPanel({
       </div>
     )}
     
-    {/* Desktop fullscreen preview modal */}
+    {/* Desktop fullscreen preview modal - outside main container */}
     {previewCode && isPreviewFullscreen && (
       <div className="hidden md:flex fixed inset-0 z-50 flex flex-col bg-code-bg">
         <div className="flex items-center justify-between px-4 py-2 bg-code-header border-b border-line shrink-0">
