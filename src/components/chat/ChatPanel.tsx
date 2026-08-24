@@ -447,51 +447,51 @@ export function ChatPanel({
           <MacHeaderForPreview code={previewCode} onClose={() => setPreviewCode(null)} />
         </div>
       )}
+      
+      {/* Fullscreen previews - absolute positioned overlays */}
+      {(previewCode && isPreviewFullscreen) && (
+        <>
+          <div className="fixed inset-0 z-50 flex flex-col bg-code-bg md:hidden pointer-events-none">
+            <div className="flex items-center justify-between px-4 py-2 bg-code-header border-b border-line shrink-0 pointer-events-auto">
+              <button
+                onClick={() => setIsPreviewFullscreen(false)}
+                className="flex items-center justify-center w-3 h-3 rounded-full bg-[#ff5f57] border border-[#e0443e] hover:brightness-90 transition-all pointer-events-auto"
+                aria-label="关闭"
+              >
+                <X className="w-2 h-2 text-[#820000] opacity-0 hover:opacity-100 transition-opacity" />
+              </button>
+              <span className="text-[11px] text-content-muted font-mono select-none pointer-events-auto">preview</span>
+              <div className="w-3" />
+            </div>
+            <iframe
+              src={`data:text/html;charset=utf-8,${encodeURIComponent(previewCode)}`}
+              className="flex-1 w-full bg-white border-0 pointer-events-auto"
+              style={{ height: 'calc(100vh - 50px)' }}
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            />
+          </div>
+          
+          <div className="hidden md:flex fixed inset-0 z-50 flex flex-col bg-code-bg pointer-events-none">
+            <div className="flex items-center justify-between px-4 py-2 bg-code-header border-b border-line shrink-0 pointer-events-auto">
+              <button
+                onClick={() => setIsPreviewFullscreen(false)}
+                className="flex items-center justify-center w-3 h-3 rounded-full bg-[#ff5f57] border border-[#e0443e] hover:brightness-90 transition-all pointer-events-auto"
+                aria-label="关闭"
+              >
+                <X className="w-2 h-2 text-[#820000] opacity-0 hover:opacity-100 transition-opacity" />
+              </button>
+              <span className="text-[11px] text-content-muted font-mono select-none pointer-events-auto">preview</span>
+              <div className="w-3" />
+            </div>
+            <iframe
+              src={`data:text/html;charset=utf-8,${encodeURIComponent(previewCode)}`}
+              className="flex-1 w-full bg-white border-0 pointer-events-auto"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            />
+          </div>
+        </>
+      )}
     </div>
-    
-    {/* Mobile fullscreen preview modal - outside main container */}
-    {previewCode && isPreviewFullscreen && (
-      <div className="fixed inset-0 z-50 flex flex-col bg-code-bg md:hidden">
-        <div className="flex items-center justify-between px-4 py-2 bg-code-header border-b border-line shrink-0">
-          <button
-            onClick={() => setIsPreviewFullscreen(false)}
-            className="flex items-center justify-center w-3 h-3 rounded-full bg-[#ff5f57] border border-[#e0443e] hover:brightness-90 transition-all"
-            aria-label="关闭"
-          >
-            <X className="w-2 h-2 text-[#820000] opacity-0 hover:opacity-100 transition-opacity" />
-          </button>
-          <span className="text-[11px] text-content-muted font-mono select-none">preview</span>
-          <div className="w-3" />
-        </div>
-        <iframe
-          src={`data:text/html;charset=utf-8,${encodeURIComponent(previewCode)}`}
-          className="flex-1 w-full bg-white border-0"
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-        />
-      </div>
-    )}
-    
-    {/* Desktop fullscreen preview modal - outside main container */}
-    {previewCode && isPreviewFullscreen && (
-      <div className="hidden md:flex fixed inset-0 z-50 flex flex-col bg-code-bg">
-        <div className="flex items-center justify-between px-4 py-2 bg-code-header border-b border-line shrink-0">
-          <button
-            onClick={() => setIsPreviewFullscreen(false)}
-            className="flex items-center justify-center w-3 h-3 rounded-full bg-[#ff5f57] border border-[#e0443e] hover:brightness-90 transition-all"
-            aria-label="关闭"
-          >
-            <X className="w-2 h-2 text-[#820000] opacity-0 hover:opacity-100 transition-opacity" />
-          </button>
-          <span className="text-[11px] text-content-muted font-mono select-none">preview</span>
-          <div className="w-3" />
-        </div>
-        <iframe
-          src={`data:text/html;charset=utf-8,${encodeURIComponent(previewCode)}`}
-          className="flex-1 w-full bg-white border-0"
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-        />
-      </div>
-    )}
   )
 }
 
