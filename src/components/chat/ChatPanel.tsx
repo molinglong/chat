@@ -426,20 +426,6 @@ export function ChatPanel({
         />
       </div>
 
-      {/* Input area - fixed at bottom */}
-      <ChatInput
-        onSend={handleSend}
-        onStop={handleStop}
-        isLoading={isLoading}
-        models={mergedModels}
-        selectedModel={currentModel}
-        onModelChange={handleModelChange}
-        deepThink={deepThink}
-        onDeepThinkChange={handleDeepThinkChange}
-        compareMode={false}
-        compareModeAvailable={!conversationId}
-        onCompareModeChange={handleCompareModeChange}
-      />
 
       {/* Right preview panel (desktop) */}
       {previewCode && !isPreviewFullscreen && (
