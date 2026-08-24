@@ -77,9 +77,10 @@ function PlainCodeBlock({ language, code, className, previewCode }: CodeBlockPro
 
   const handlePreview = useCallback(() => {
     if (previewCode) {
-      setIsFullscreen(true)
+      setPreviewCode(previewCode) // Set the actual HTML code first
+      setIsFullscreen(true)       // Then open fullscreen
     }
-  }, [previewCode, setIsFullscreen])
+  }, [previewCode, setPreviewCode, setIsFullscreen])
 
   return (
     <div className={cn('relative group rounded-lg overflow-hidden my-3 border border-line', className)}>
@@ -118,9 +119,10 @@ export function CodeBlock({ language, code, className, previewCode }: CodeBlockP
 
   const handlePreview = useCallback(() => {
     if (previewCode) {
-      setIsFullscreen(true)
+      setPreviewCode(previewCode) // Set the actual HTML code first
+      setIsFullscreen(true)       // Then open fullscreen
     }
-  }, [previewCode, setIsFullscreen])
+  }, [previewCode, setPreviewCode, setIsFullscreen])
 
   useEffect(() => {
     let cancelled = false
