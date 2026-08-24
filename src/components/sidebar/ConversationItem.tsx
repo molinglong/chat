@@ -10,11 +10,19 @@ import { useChatStore } from '@/store/chat-store'
 interface ConversationItemProps {
   id: string
   title: string
+  mode?: string
+  /** 列表中的索引,用于逐个淡入的错峰延迟 */
+  index?: number
   onDelete?: (id: string) => void
   onRename?: (id: string, newTitle: string) => void
 }
 
-export function ConversationItem({ id, title, onDelete, onRename }: ConversationItemProps) {
+/** 逐个加载: 索引错峰延迟,超过 15 个后封顶 300ms 避免等待过久 */
+const STAGGER_STEP_MS = 20
+const STAGGER_MAX_INDEX = 15
+
+export function ConversationItem({ id, title, mode, index = 0, onDelete, onRename }: ConversationItemProps) {
+  const staggerDelay = Math.min(index, STAGGER_MAX_INDEX) * STAGGER_STEP_MS
   const pathname = usePathname()
   const { currentConversationId } = useChatStore()
   // Fall back to the store because after the first message of a new chat the URL
@@ -105,14 +113,20 @@ export function ConversationItem({ id, title, onDelete, onRename }: Conversation
   return (
     <Link
       href={`/chat/c/${id}`}
+      style={{ animationDelay: `${staggerDelay}ms` }}
       className={cn(
-        'group flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm transition-colors',
+        'sidebar-item-enter group flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm transition-colors',
         isActive
           ? 'bg-accent-soft text-content-primary font-medium'
           : 'text-content-secondary hover:bg-surface-subtle/60 hover:text-content-primary'
       )}
     >
       <span className="flex-1 truncate">{title}</span>
+      {mode === 'compare' && (
+        <span className="shrink-0 text-[9px] px-1 py-0.5 rounded bg-accent-soft text-content-secondary font-medium">
+          对比
+        </span>
+      )}
       {onRename && (
         <button
           onClick={startEditing}

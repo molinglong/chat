@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect, KeyboardEvent, ChangeEvent } from 'react'
-import { Send, Square, X } from 'lucide-react'
+import { Send, Square, X, Plus, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { FileUpload, type Attachment } from './FileUpload'
+import { FileUpload, deleteUploadedFile, type Attachment } from './FileUpload'
 import { ModelSelector } from './ModelSelector'
 import type { ModelDefinition } from '@/lib/ai/types'
 
@@ -17,11 +17,33 @@ export interface ChatInputProps {
   onModelChange: (modelId: string) => void
   deepThink: boolean
   onDeepThinkChange: (enabled: boolean) => void
+  // 对比模式
+  compareMode?: boolean
+  compareModeAvailable?: boolean
+  onCompareModeChange?: (enabled: boolean) => void
+  compareModels?: string[]
+  onCompareModelsChange?: (models: string[]) => void
 }
 
-export function ChatInput({ onSend, onStop, isLoading, className, models, selectedModel, onModelChange, deepThink, onDeepThinkChange }: ChatInputProps) {
+export function ChatInput({
+  onSend,
+  onStop,
+  isLoading,
+  className,
+  models,
+  selectedModel,
+  onModelChange,
+  deepThink,
+  onDeepThinkChange,
+  compareMode = false,
+  compareModeAvailable = false,
+  onCompareModeChange,
+  compareModels,
+  onCompareModelsChange,
+}: ChatInputProps) {
   const [input, setInput] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [sendError, setSendError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Auto-resize textarea
@@ -57,6 +79,41 @@ export function ChatInput({ onSend, onStop, isLoading, className, models, select
   function handleSend() {
     const trimmed = input.trim()
     if ((!trimmed && attachments.length === 0) || isLoading) return
+
+    // 图片附件需要视觉模型:拦截不支持视觉的模型,给出明确指引
+    if (attachments.some((a) => a.type.startsWith('image/'))) {
+      const visionModels = models.filter((m) => m.supportsVision)
+      if (compareMode && compareModels) {
+        const blind = compareModels.filter(
+          (id) => !models.find((m) => m.id === id)?.supportsVision
+        )
+        if (blind.length > 0) {
+          const blindNames = blind
+            .map((id) => models.find((m) => m.id === id)?.name ?? id)
+            .join('、')
+          setSendError(
+            `对比模式中的 ${blindNames} 不支持图片识别` +
+              (visionModels.length > 0
+                ? `，请换成支持视觉的模型（如 ${visionModels.slice(0, 2).map((m) => m.name).join('、')}）`
+                : '')
+          )
+          return
+        }
+      } else {
+        const current = models.find((m) => m.id === selectedModel)
+        if (current && !current.supportsVision) {
+          setSendError(
+            `当前模型 ${current.name} 不支持图片识别` +
+              (visionModels.length > 0
+                ? `，请切换到 ${visionModels.slice(0, 2).map((m) => m.name).join(' 或 ')} 后重试`
+                : '，请先选择支持视觉的模型')
+          )
+          return
+        }
+      }
+    }
+
+    setSendError(null)
     onSend(trimmed, attachments.length > 0 ? attachments : undefined)
     setInput('')
     setAttachments([])
@@ -66,6 +123,29 @@ export function ChatInput({ onSend, onStop, isLoading, className, models, select
         textareaRef.current.style.height = 'auto'
       }
     }, 0)
+  }
+
+  // 对比模式: 更换某个位置的模型(若与列表内其他位置重复则交换)
+  function handleCompareModelChange(index: number, modelId: string) {
+    if (!compareModels || !onCompareModelsChange) return
+    const next = [...compareModels]
+    const existingIdx = next.indexOf(modelId)
+    if (existingIdx !== -1 && existingIdx !== index) {
+      next[existingIdx] = next[index]
+    }
+    next[index] = modelId
+    onCompareModelsChange(next)
+  }
+
+  function handleAddCompareModel() {
+    if (!compareModels || !onCompareModelsChange || compareModels.length >= 3) return
+    const next = models.find((m) => !compareModels.includes(m.id))
+    if (next) onCompareModelsChange([...compareModels, next.id])
+  }
+
+  function handleRemoveCompareModel(index: number) {
+    if (!compareModels || !onCompareModelsChange || compareModels.length <= 2) return
+    onCompareModelsChange(compareModels.filter((_, i) => i !== index))
   }
 
   return (
@@ -104,7 +184,12 @@ export function ChatInput({ onSend, onStop, isLoading, className, models, select
                     <p className="text-[11px] text-content-primary truncate">{att.name}</p>
                   </div>
                   <button
-                    onClick={() => setAttachments((prev) => prev.filter((_, i) => i !== idx))}
+                    onClick={() => {
+                      const removed = attachments[idx]
+                      setAttachments((prev) => prev.filter((_, i) => i !== idx))
+                      // 移除未发送的附件时同步删除服务端文件
+                      if (removed) deleteUploadedFile(removed.url)
+                    }}
                     className="shrink-0 p-0.5 rounded-md opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-500 transition-opacity"
                     aria-label="移除"
                   >
@@ -112,6 +197,21 @@ export function ChatInput({ onSend, onStop, isLoading, className, models, select
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* 发送前校验错误提示 */}
+          {sendError && (
+            <div className="flex items-start gap-1.5 px-4 pt-2">
+              <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-red-500 leading-relaxed flex-1 min-w-0">{sendError}</p>
+              <button
+                onClick={() => setSendError(null)}
+                className="shrink-0 p-0.5 rounded text-content-muted hover:text-content-primary transition-colors"
+                aria-label="关闭提示"
+              >
+                <X className="w-3 h-3" />
+              </button>
             </div>
           )}
 
@@ -135,6 +235,43 @@ export function ChatInput({ onSend, onStop, isLoading, className, models, select
             />
           </div>
 
+          {/* 对比模式: 多模型选择行(移动端隐藏) */}
+          {compareMode && compareModels && onCompareModelsChange && (
+            <div className="hidden md:flex items-center justify-end gap-1 px-3 pt-1.5">
+              {compareModels.map((modelId, index) => (
+                <div key={modelId} className="flex items-center gap-0.5">
+                  <ModelSelector
+                    models={models}
+                    selectedModel={modelId}
+                    onModelChange={(id) => handleCompareModelChange(index, id)}
+                    compact
+                  />
+                  {compareModels.length > 2 && (
+                    <button
+                      onClick={() => handleRemoveCompareModel(index)}
+                      className="shrink-0 p-1 rounded-md text-content-muted hover:text-red-500 hover:bg-surface-subtle transition-colors"
+                      aria-label="移除模型"
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {compareModels.length < 3 && (
+                <button
+                  onClick={handleAddCompareModel}
+                  className="flex items-center gap-0.5 h-7 px-2 rounded-full text-[11px] font-medium
+                    border border-dashed border-line text-content-secondary
+                    hover:bg-surface-subtle transition-colors shrink-0"
+                  title="添加对比模型"
+                  aria-label="添加对比模型"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Bottom controls row */}
           <div className="flex items-center justify-between px-3 pb-2 pt-1.5">
             {/* Left: attachment + deep think toggle */}
@@ -143,6 +280,7 @@ export function ChatInput({ onSend, onStop, isLoading, className, models, select
                 attachments={attachments}
                 onAttachmentsChange={setAttachments}
                 disabled={isLoading}
+                hideAttachmentsPreview
               />
               <button
                 onClick={() => onDeepThinkChange(!deepThink)}
@@ -158,16 +296,36 @@ export function ChatInput({ onSend, onStop, isLoading, className, models, select
               >
                 深度思考
               </button>
+              {compareModeAvailable && onCompareModeChange && (
+                <button
+                  onClick={() => onCompareModeChange(!compareMode)}
+                  disabled={isLoading}
+                  className={cn(
+                    'hidden md:inline-flex items-center h-7 px-2.5 rounded-full text-[11px] font-medium transition-colors',
+                    compareMode
+                      ? 'bg-accent text-accent-foreground'
+                      : 'bg-surface-muted hover:bg-surface-subtle text-content-secondary',
+                    isLoading && 'opacity-50 cursor-not-allowed'
+                  )}
+                  title="对比模式"
+                  aria-label="对比模式"
+                  aria-pressed={compareMode}
+                >
+                  对比
+                </button>
+              )}
             </div>
 
             {/* Right: model selector + send button */}
             <div className="flex items-center gap-1">
-              <ModelSelector
-                models={models}
-                selectedModel={selectedModel}
-                onModelChange={onModelChange}
-                compact
-              />
+              {!compareMode && (
+                <ModelSelector
+                  models={models}
+                  selectedModel={selectedModel}
+                  onModelChange={onModelChange}
+                  compact
+                />
+              )}
               {isLoading ? (
                 <button
                   onClick={onStop}

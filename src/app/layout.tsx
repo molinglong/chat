@@ -7,22 +7,22 @@ import "./globals.css";
 const pingfang = localFont({
   src: [
     {
-      path: "./fonts/pingfangsc-light.otf",
+      path: "./fonts/pingfangsc-light.woff2",
       weight: "300",
       style: "normal",
     },
     {
-      path: "./fonts/pingfangsc-regular.otf",
+      path: "./fonts/pingfangsc-regular.woff2",
       weight: "400",
       style: "normal",
     },
     {
-      path: "./fonts/pingfangsc-medium.otf",
+      path: "./fonts/pingfangsc-medium.woff2",
       weight: "500",
       style: "normal",
     },
     {
-      path: "./fonts/pingfangsc-semibold.otf",
+      path: "./fonts/pingfangsc-semibold.woff2",
       weight: "600",
       style: "normal",
     },

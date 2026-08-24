@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import { deleteReferencedFiles } from "@/lib/uploads"
 
 export async function GET(
   req: NextRequest,
@@ -14,6 +15,7 @@ export async function GET(
   const { id } = params
   const { searchParams } = new URL(req.url)
   const cursor = searchParams.get("cursor") ?? undefined
+  const model = searchParams.get("model") ?? undefined
   const limit = Math.min(Number(searchParams.get("limit") ?? "50"), 100)
 
   // Verify the conversation belongs to the user
@@ -27,7 +29,7 @@ export async function GET(
   }
 
   const messages = await prisma.message.findMany({
-    where: { conversationId: id },
+    where: { conversationId: id, ...(model ? { model } : {}) },
     orderBy: { createdAt: "desc" },
     take: limit + 1, // fetch one extra to determine if there's a next page
     ...(cursor
@@ -41,6 +43,8 @@ export async function GET(
       role: true,
       content: true,
       attachments: true,
+      reasoning: true,
+      model: true,
       createdAt: true,
     },
   })
@@ -102,6 +106,16 @@ export async function DELETE(
     return NextResponse.json({ error: "Message not found" }, { status: 404 })
   }
 
+  // 删除前收集将删除消息引用的附件文件(编辑消息时级联清理)
+  const doomed = await prisma.message.findMany({
+    where: {
+      conversationId: id,
+      createdAt: { gte: targetMessage.createdAt },
+      attachments: { not: null },
+    },
+    select: { attachments: true },
+  })
+
   // Delete the target message and all messages after it
   await prisma.message.deleteMany({
     where: {
@@ -109,6 +123,11 @@ export async function DELETE(
       createdAt: { gte: targetMessage.createdAt },
     },
   })
+
+  // 库删除完成后清理磁盘文件
+  for (const m of doomed) {
+    await deleteReferencedFiles(m.attachments)
+  }
 
   return NextResponse.json({ success: true })
 }

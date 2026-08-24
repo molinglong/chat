@@ -8,81 +8,148 @@ import { AlertCircle, RefreshCw, Settings as SettingsIcon } from 'lucide-react'
 import Link from 'next/link'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
+import { ComparePanel } from './ComparePanel'
 import { useChatStore } from '@/store/chat-store'
+import { getErrorMessage } from '@/lib/chat-errors'
 import type { ModelDefinition } from '@/lib/ai/types'
 import type { Attachment } from './FileUpload'
 
 const MODEL_STORAGE_KEY = 'chat:selectedModel'
 const DEEP_THINK_STORAGE_KEY = 'chat:deepThink'
+const COMPARE_MODE_STORAGE_KEY = 'chat:compareMode'
+const COMPARE_MODELS_STORAGE_KEY = 'chat:compareModels'
 
 interface ChatPanelProps {
   conversationId?: string
   conversationTitle?: string
   initialMessages: UIMessage[]
   initialModel: string
-  allModels: ModelDefinition[]
-}
-
-function getErrorMessage(error: Error): { message: string; type: 'api_key' | 'rate_limit' | 'network' | 'general' } {
-  const msg = error.message || ''
-
-  // API Key missing
-  if (msg.includes('No API key') || msg.includes('API key') || msg.includes('api key')) {
-    // Try to extract provider name
-    const match = msg.match(/for\s+(\w+)/i)
-    const provider = match?.[1] || ''
-    return {
-      message: provider
-        ? `请先在设置中配置 ${provider} 的 API Key`
-        : '请先在设置中配置对应提供商的 API Key',
-      type: 'api_key',
-    }
-  }
-
-  // Rate limit
-  if (msg.includes('rate') || msg.includes('429') || msg.includes('too many') || msg.includes('Too many')) {
-    return { message: '请求过于频繁，请稍后再试', type: 'rate_limit' }
-  }
-
-  // Network errors
-  if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('ECONNREFUSED')) {
-    return { message: '网络连接失败，请检查网络后重试', type: 'network' }
-  }
-
-  // Fallback: show the real error from the provider so users can see the cause
-  // (e.g. quota exhausted, invalid model, auth failure, etc.)
-  const cleaned = msg.replace(/^AI_APICallError:\s*/i, '').trim()
-  return { message: cleaned || '发生错误，请重试', type: 'general' }
+  allModels: ModelDefinition[] // builtin only
+  /** 会话模式：single | compare(来自 DB) */
+  mode?: string
+  /** 对比模式模型列表 (来自 DB) */
+  compareModels?: string[]
+  /** 对比模式每个泳道的初始消息 */
+  laneInitialMessages?: UIMessage[][]
 }
 
 export function ChatPanel({
   conversationId: initialConversationId,
   initialMessages,
   initialModel,
-  allModels,
+  allModels, // builtin
   conversationTitle,
+  mode,
+  compareModels: compareModelsProp,
+  laneInitialMessages,
 }: ChatPanelProps) {
   const [currentModel, setCurrentModel] = useState(initialModel)
   const [conversationId, setConversationId] = useState(initialConversationId)
-  const [deepThink, setDeepThink] = useState(false)
+  
+  // Auto-enable deepThink for reasoning models (like DeepSeek-R1), but allow user to toggle off
+  const shouldAutoEnableDeepThink = initialModel && allModels.find(m => m.id === initialModel)?.supportsReasoning
+  const [deepThink, setDeepThink] = useState(shouldAutoEnableDeepThink || false)
+  
+  // Sync deepThink state with model changes - auto-enable for reasoning models
+  useEffect(() => {
+    if (currentModel && !deepThink) {
+      const modelDef = allModels.find(m => m.id === currentModel)
+      if (modelDef?.supportsReasoning) {
+        setDeepThink(true)
+      }
+    }
+  }, [currentModel, deepThink, allModels])
+
+  // Fetch custom models and merge with builtin
+  const [mergedModels, setMergedModels] = useState<ModelDefinition[]>(() => allModels)
+  
+  useEffect(() => {
+    if (!initialConversationId) {
+      // new chat: fetch custom models and merge
+      let cancelled = false
+      fetch('/api/custom-models')
+        .then((r) => r.json())
+        .then((custom: ModelDefinition[]) => {
+          if (!cancelled && custom.length > 0) {
+            setMergedModels([...allModels, ...custom])
+          } else {
+            setMergedModels(allModels)
+          }
+        })
+        .catch(() => { setMergedModels(allModels) })
+      return () => { cancelled = true }
+    } else {
+      // existing chat: use provided allModels (already includes custom from server side if needed)
+      setMergedModels(allModels)
+    }
+  }, [allModels, initialConversationId])
+
+  // 对比模式状态: 仅从 props 初始化(已有 compare 会话),新聊天的 localStorage 预设
+  // 在挂载后加载,避免 SSR 水合不一致
+  const [compareMode, setCompareMode] = useState(mode === 'compare')
+
+  // 对比模型列表：DB > 默认前两个 (use mergedModels)
+  const [compareModels, setCompareModels] = useState<string[]>(() => {
+    if (compareModelsProp && compareModelsProp.length >= 2) return compareModelsProp
+    const first = mergedModels[0]?.id
+    const second = mergedModels.find((m) => m.id !== first)?.id
+    return [first, second].filter(Boolean) as string[]
+  })
+
+  const handleCompareModeChange = useCallback(
+    (enabled: boolean) => {
+      setCompareMode(enabled)
+      localStorage.setItem(COMPARE_MODE_STORAGE_KEY, String(enabled))
+      if (enabled) {
+        // 无保存的对比模型时，用当前模型 + 第一个不同模型作为默认
+        const saved = localStorage.getItem(COMPARE_MODELS_STORAGE_KEY)
+        if (!saved) {
+          const second = mergedModels.find((m) => m.id !== currentModel)?.id
+          if (second) setCompareModels([currentModel, second])
+        }
+      }
+    },
+    [mergedModels, currentModel]
+  )
+
+  // 对比模式会话创建后同步回来,用于隐藏切换开关
+  const handleCompareConversationCreated = useCallback((convId: string) => {
+    setConversationId((prev) => prev ?? convId)
+  }, [])
 
   // On mount, for new chats, load the last selected model and deep think preference from localStorage
   useEffect(() => {
     if (!initialConversationId) {
       const saved = localStorage.getItem(MODEL_STORAGE_KEY)
-      if (saved && allModels.some((m) => m.id === saved)) {
+      if (saved && mergedModels.some((m) => m.id === saved)) {
         setCurrentModel(saved)
       }
       const savedDeepThink = localStorage.getItem(DEEP_THINK_STORAGE_KEY)
       if (savedDeepThink === 'true') {
         setDeepThink(true)
       }
+      // 恢复对比模式预设 (移动端不实现对比，跳过)
+      if (
+        window.matchMedia('(min-width: 768px)').matches &&
+        localStorage.getItem(COMPARE_MODE_STORAGE_KEY) === 'true'
+      ) {
+        setCompareMode(true)
+      }
+      try {
+        const savedCompare = JSON.parse(localStorage.getItem(COMPARE_MODELS_STORAGE_KEY) ?? '[]')
+        if (Array.isArray(savedCompare) && savedCompare.length >= 2) {
+          const valid = savedCompare.filter((id: unknown) => mergedModels.some((m) => m.id === id))
+          if (valid.length >= 2) setCompareModels(valid as string[])
+        }
+      } catch {
+        // 忽略损坏的 localStorage 数据
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const conversationIdRef = useRef(initialConversationId)
   const attachmentsRef = useRef<Attachment[] | undefined>(undefined)
-  const { setCurrentConversationId, setConversationTitle } = useChatStore()
+  const { setCurrentConversationId, setConversationTitle, bumpConversationVersion } = useChatStore()
 
   // Notify store of current conversation (triggers Sidebar to refresh conversation list)
   useEffect(() => {
@@ -113,7 +180,8 @@ export function ChatPanel({
       if (newConvId && newConvId !== conversationIdRef.current) {
         conversationIdRef.current = newConvId
         setConversationId(newConvId)
-        setCurrentConversationId(newConvId) // Notify Sidebar to refresh
+        setCurrentConversationId(newConvId)
+        bumpConversationVersion() // 新会话已入库,通知侧边栏刷新列表
         if (newConvTitle) {
           setConversationTitle(decodeURIComponent(newConvTitle))
         }
@@ -145,12 +213,14 @@ export function ChatPanel({
         setMessagesRef.current?.((prev: UIMessage[]) =>
           prev.map((m) => {
             if (m.id !== message.id) return m
-            const reasoningParts = m.parts.filter((p) => p.type === "reasoning")
             return {
               ...m,
+              // 以库中最终数据为准:reasoning 可能被兜底拆分(答案从推理尾部移入正文)
               parts: [
-                ...reasoningParts,
-                { type: "text" as const, text: latest.content, state: "done" as const },
+                ...(typeof latest.reasoning === 'string' && latest.reasoning.trim()
+                  ? [{ type: 'reasoning' as const, text: latest.reasoning, state: 'done' as const }]
+                  : []),
+                { type: 'text' as const, text: latest.content, state: 'done' as const },
               ],
             }
           })
@@ -163,6 +233,23 @@ export function ChatPanel({
 
   // Keep ref in sync with latest setMessages
   setMessagesRef.current = setMessages
+
+  // 发送后把附件挂到最后一条用户消息上,保证当前会话中即时展示(与服务端落库一致)
+  useEffect(() => {
+    const atts = attachmentsRef.current
+    if (!atts || atts.length === 0) return
+    setMessages((prev) => {
+      const next = [...prev]
+      for (let i = next.length - 1; i >= 0; i--) {
+        if (next[i].role === 'user') {
+          next[i] = { ...next[i], attachments: atts } as UIMessage
+          break
+        }
+      }
+      return next
+    })
+    attachmentsRef.current = undefined
+  }, [messages, setMessages])
 
   const isLoading = status === 'submitted' || status === 'streaming'
 
@@ -239,6 +326,24 @@ export function ChatPanel({
 
   const errorInfo = error ? getErrorMessage(error) : null
 
+  // 对比模式: 渲染并排泳道视图(key 确保模型列表变化时重建泳道)
+  if (compareMode) {
+    return (
+      <ComparePanel
+        key={compareModels.join('+')}
+        conversationId={initialConversationId}
+        initialLaneMessages={laneInitialMessages ?? compareModels.map(() => [])}
+        initialCompareModels={compareModels}
+        allModels={mergedModels}
+        deepThink={deepThink}
+        onDeepThinkChange={handleDeepThinkChange}
+        onCompareModeChange={handleCompareModeChange}
+        compareModeAvailable={!conversationId}
+        onConversationCreated={handleCompareConversationCreated}
+      />
+    )
+  }
+
   return (
     <div className="flex flex-col h-full relative overflow-hidden">
 
@@ -259,8 +364,8 @@ export function ChatPanel({
               <button
                 onClick={handleRetry}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                  bg-accent text-accent-foreground
-                  hover:bg-accent-hover transition-colors
+                  bg-red-500 text-white
+                  hover:bg-red-600 transition-colors
                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-strong"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
@@ -308,11 +413,14 @@ export function ChatPanel({
         onSend={handleSend}
         onStop={handleStop}
         isLoading={isLoading}
-        models={allModels}
+        models={mergedModels}
         selectedModel={currentModel}
         onModelChange={handleModelChange}
         deepThink={deepThink}
         onDeepThinkChange={handleDeepThinkChange}
+        compareMode={false}
+        compareModeAvailable={!conversationId}
+        onCompareModeChange={handleCompareModeChange}
       />
     </div>
   )

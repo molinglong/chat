@@ -10,6 +10,9 @@ interface ChatState {
   setConversationTitle: (title: string | null) => void
   settingsOpen: boolean
   setSettingsOpen: (open: boolean) => void
+  /** 会话列表刷新信号: 新会话创建时 +1,侧边栏监听此值重新拉取列表 */
+  conversationVersion: number
+  bumpConversationVersion: () => void
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -22,4 +25,7 @@ export const useChatStore = create<ChatState>((set) => ({
   setConversationTitle: (title) => set({ conversationTitle: title }),
   settingsOpen: false,
   setSettingsOpen: (open) => set({ settingsOpen: open }),
+  conversationVersion: 0,
+  bumpConversationVersion: () =>
+    set((state) => ({ conversationVersion: state.conversationVersion + 1 })),
 }))

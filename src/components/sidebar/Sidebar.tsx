@@ -11,22 +11,32 @@ import { ThemeToggle } from '../ThemeToggle'
 interface ConversationData {
   id: string
   title: string
+  mode?: string
   updatedAt: string
 }
 
+/** 每页加载的会话数量 */
+const PAGE_SIZE = 20
+
 export function Sidebar() {
-  const { sidebarOpen, setSidebarOpen, currentConversationId, setSettingsOpen } = useChatStore()
+  const { sidebarOpen, setSidebarOpen, setSettingsOpen, conversationVersion } = useChatStore()
   const [conversations, setConversations] = useState<ConversationData[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [total, setTotal] = useState(0)
   const router = useRouter()
   const pathname = usePathname()
 
+  // 首次加载 / 新会话创建后刷新: 从第一页重新拉取
   const fetchConversations = useCallback(async () => {
     try {
-      const res = await fetch('/api/conversations')
+      const res = await fetch(`/api/conversations?limit=${PAGE_SIZE}&offset=0`)
       if (res.ok) {
         const data = await res.json()
-        setConversations(data)
+        setConversations(data.items ?? [])
+        setTotal(data.total ?? 0)
+        setHasMore(!!data.hasMore)
       }
     } catch (err) {
       console.error('Failed to fetch conversations:', err)
@@ -35,10 +45,32 @@ export function Sidebar() {
     }
   }, [])
 
-  // Re-fetch when a conversation is created or switched
+  // 追加加载下一页
+  const loadMore = useCallback(async () => {
+    if (loadingMore) return
+    setLoadingMore(true)
+    try {
+      const res = await fetch(
+        `/api/conversations?limit=${PAGE_SIZE}&offset=${conversations.length}`
+      )
+      if (res.ok) {
+        const data = await res.json()
+        const items = data.items ?? []
+        setConversations((prev) => [...prev, ...items])
+        setTotal(data.total ?? 0)
+        setHasMore(!!data.hasMore)
+      }
+    } catch (err) {
+      console.error('Failed to load more conversations:', err)
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [loadingMore, conversations.length])
+
+  // 新会话创建时(bump 信号)刷新列表,不再依赖 currentConversationId 避免重复请求
   useEffect(() => {
     fetchConversations()
-  }, [currentConversationId, fetchConversations])
+  }, [conversationVersion, fetchConversations])
 
   function handleNewConversation() {
     setSidebarOpen(false)
@@ -141,15 +173,29 @@ export function Sidebar() {
                 暂无对话记录
               </div>
             ) : (
-              conversations.map((conv) => (
-                <ConversationItem
-                  key={conv.id}
-                  id={conv.id}
-                  title={conv.title}
-                  onDelete={handleDeleteConversation}
-                  onRename={handleRenameConversation}
-                />
-              ))
+              <>
+                {conversations.map((conv, index) => (
+                  <ConversationItem
+                    key={conv.id}
+                    id={conv.id}
+                    title={conv.title}
+                    mode={conv.mode}
+                    index={index}
+                    onDelete={handleDeleteConversation}
+                    onRename={handleRenameConversation}
+                  />
+                ))}
+                {/* 限量加载: 还有更多时显示加载按钮 */}
+                {hasMore && (
+                  <button
+                    onClick={loadMore}
+                    disabled={loadingMore}
+                    className="w-full mt-1 px-3 py-1.5 rounded-lg text-xs text-content-muted hover:text-content-primary hover:bg-surface-subtle/60 transition-colors disabled:opacity-50"
+                  >
+                    {loadingMore ? '加载中...' : `加载更多 (${total - conversations.length} 条剩余)`}
+                  </button>
+                )}
+              </>
             )}
           </nav>
         </div>

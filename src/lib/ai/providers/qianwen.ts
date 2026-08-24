@@ -22,8 +22,13 @@ export const qianwenProvider: ProviderDefinition = {
     // 推理模型
     { id: "qwq-32b-preview", name: "QwQ-32B", provider: "qianwen", contextWindow: 131072, supportsVision: false, supportsFiles: false, supportsReasoning: true },
   ],
-  createProvider: (apiKey: string) => createOpenAI({
-    apiKey,
-    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-  }),
+  createProvider: (apiKey: string) => {
+    const openai = createOpenAI({
+      apiKey,
+      baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    })
+    // DashScope 兼容模式的 /responses 端点对部分模型名支持不全(如 qwen-max
+    // 报 "Unsupported model"),统一走 Chat Completions 端点
+    return (modelId: string) => openai.chat(modelId)
+  },
 }

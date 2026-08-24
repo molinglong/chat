@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import type { ModelDefinition } from '@/lib/ai/types'
 
-const PROVIDER_DOT: Record<string, string> = {
+export const PROVIDER_DOT: Record<string, string> = {
   openai: 'bg-emerald-500',
   anthropic: 'bg-orange-500',
   deepseek: 'bg-blue-500',
@@ -18,6 +18,24 @@ const PROVIDER_DOT: Record<string, string> = {
   zhipu: 'bg-cyan-500',
   doubao: 'bg-teal-500',
   yi: 'bg-fuchsia-500',
+  custom: 'bg-gray-400', // 自定义模型
+}
+
+export const PROVIDER_NAMES: Record<string, string> = {
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  deepseek: 'DeepSeek',
+  qianwen: '通义千问',
+  wenxin: '文心一言',
+  google: 'Google Gemini',
+  mistral: 'Mistral',
+  xai: 'xAI Grok',
+  groq: 'Groq',
+  moonshot: 'Moonshot (Kimi)',
+  zhipu: '智谱 GLM',
+  doubao: '字节豆包',
+  yi: '零一万物 Yi',
+  custom: '自定义', // 自定义模型
 }
 
 interface ModelSelectorProps {
@@ -60,30 +78,15 @@ export function ModelSelector({
       .catch(() => {})
   }, [isOpen])
 
-  // Group models by provider (only configured ones)
+  // Group models by provider (only configured ones; custom always shown)
   const grouped = models.reduce<Record<string, { providerName: string; models: ModelDefinition[] }>>(
     (acc, model) => {
-      // Skip providers that aren't configured
-      if (!configuredProviders.has(model.provider)) return acc
+      // Skip providers that aren't configured (custom always shown)
+      if (!configuredProviders.has(model.provider) && model.provider !== 'custom') return acc
 
       if (!acc[model.provider]) {
-        const nameMap: Record<string, string> = {
-          openai: 'OpenAI',
-          anthropic: 'Anthropic',
-          deepseek: 'DeepSeek',
-          qianwen: '通义千问',
-          wenxin: '文心一言',
-          google: 'Google Gemini',
-          mistral: 'Mistral',
-          xai: 'xAI Grok',
-          groq: 'Groq',
-          moonshot: 'Moonshot (Kimi)',
-          zhipu: '智谱 GLM',
-          doubao: '字节豆包',
-          yi: '零一万物 Yi',
-        }
         acc[model.provider] = {
-          providerName: nameMap[model.provider] || model.provider,
+          providerName: PROVIDER_NAMES[model.provider] || model.provider,
           models: [],
         }
       }

@@ -4,12 +4,8 @@ import { useState, useRef, useCallback, DragEvent } from 'react'
 import { Paperclip, X, Upload, FileText, Image as ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export interface Attachment {
-  url: string
-  name: string
-  type: string
-  size: number
-}
+export type { Attachment } from '@/lib/attachment-types'
+import type { Attachment } from '@/lib/attachment-types'
 
 interface UploadingFile {
   id: string
@@ -21,8 +17,22 @@ interface UploadingFile {
 
 interface FileUploadProps {
   attachments: Attachment[]
-  onAttachmentsChange: (attachments: Attachment[]) => void
+  onAttachmentsChange: React.Dispatch<React.SetStateAction<Attachment[]>>
   disabled?: boolean
+  /** 隐藏已上传附件的预览(由 ChatInput 顶部统一展示),仅保留上传中进度 */
+  hideAttachmentsPreview?: boolean
+}
+
+export function deleteUploadedFile(url: string) {
+  try {
+    const name = url.split('/').pop()
+    if (!name) return
+    fetch(`/api/upload?file=${encodeURIComponent(name)}`, { method: 'DELETE' }).catch(() => {
+      // 删除失败不影响主流程,孤儿清理会兜底
+    })
+  } catch {
+    // 忽略
+  }
 }
 
 function formatSize(bytes: number): string {
@@ -68,7 +78,12 @@ function uploadFile(file: File, onProgress: (pct: number) => void): Promise<Atta
 
 let idCounter = 0
 
-export function FileUpload({ attachments, onAttachmentsChange, disabled }: FileUploadProps) {
+export function FileUpload({
+  attachments,
+  onAttachmentsChange,
+  disabled,
+  hideAttachmentsPreview = false,
+}: FileUploadProps) {
   const [uploading, setUploading] = useState<UploadingFile[]>([])
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -84,13 +99,18 @@ export function FileUpload({ attachments, onAttachmentsChange, disabled }: FileU
         setUploading((prev) => [...prev, entry])
 
         try {
+          // 客户端前置校验:本期暂不支持 PDF
+          if (file.type === 'application/pdf') {
+            throw new Error('本期暂不支持 PDF,请上传图片或文本文件')
+          }
           const result = await uploadFile(file, (pct) => {
             setUploading((prev) =>
               prev.map((u) => (u.id === id ? { ...u, progress: pct } : u))
             )
           })
           setUploading((prev) => prev.filter((u) => u.id !== id))
-          onAttachmentsChange([...attachments, result])
+          // 函数式更新,避免并发上传时覆盖彼此的结果
+          onAttachmentsChange((prev) => [...prev, result])
         } catch (err) {
           setUploading((prev) =>
             prev.map((u) =>
@@ -108,11 +128,16 @@ export function FileUpload({ attachments, onAttachmentsChange, disabled }: FileU
 
       await Promise.all(tasks)
     },
-    [attachments, onAttachmentsChange]
+    [onAttachmentsChange]
   )
 
   function handleRemove(index: number) {
-    onAttachmentsChange(attachments.filter((_, i) => i !== index))
+    const removed = attachments[index]
+    onAttachmentsChange((prev) => prev.filter((_, i) => i !== index))
+    // 移除未发送的附件时同步删除服务端文件(已发送的文件会被接口拒绝删除)
+    if (removed) {
+      deleteUploadedFile(removed.url)
+    }
   }
 
   function handleDragOver(e: DragEvent<HTMLDivElement>) {
@@ -141,7 +166,7 @@ export function FileUpload({ attachments, onAttachmentsChange, disabled }: FileU
         ref={inputRef}
         type="file"
         multiple
-        accept="image/*,application/pdf,text/*"
+        accept="image/*,text/*"
         className="hidden"
         onChange={(e) => {
           if (e.target.files) handleFiles(e.target.files)
@@ -150,43 +175,45 @@ export function FileUpload({ attachments, onAttachmentsChange, disabled }: FileU
       />
 
       {/* Attachments preview */}
-      {(attachments.length > 0 || uploading.length > 0) && (
-        <div className="flex flex-wrap gap-2 px-1">
-          {attachments.map((att, idx) => (
-            <div
-              key={att.url + idx}
-              className={cn(
-                'relative group flex items-center gap-2 rounded-lg border',
-                'border-line bg-surface-muted',
-                'px-2 py-1.5 max-w-[180px]'
-              )}
-            >
-              {att.type.startsWith('image/') ? (
-                <ImageIcon className="w-4 h-4 text-content-secondary shrink-0" />
-              ) : (
-                <FileText className="w-4 h-4 text-content-muted shrink-0" />
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-content-primary truncate">
-                  {att.name}
-                </p>
-                <p className="text-[10px] text-content-muted">
-                  {formatSize(att.size)}
-                </p>
-              </div>
-              <button
-                onClick={() => handleRemove(idx)}
-                className={cn(
-                  'shrink-0 p-0.5 rounded-md transition-colors',
-                  'opacity-0 group-hover:opacity-100',
-                  'hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-500'
-                )}
-                aria-label="移除文件"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ))}
+      {(!hideAttachmentsPreview || uploading.length > 0) &&
+        (attachments.length > 0 || uploading.length > 0) && (
+          <div className="flex flex-wrap gap-2 px-1">
+            {!hideAttachmentsPreview &&
+              attachments.map((att, idx) => (
+                <div
+                  key={att.url + idx}
+                  className={cn(
+                    'relative group flex items-center gap-2 rounded-lg border',
+                    'border-line bg-surface-muted',
+                    'px-2 py-1.5 max-w-[180px]'
+                  )}
+                >
+                  {att.type.startsWith('image/') ? (
+                    <ImageIcon className="w-4 h-4 text-content-secondary shrink-0" />
+                  ) : (
+                    <FileText className="w-4 h-4 text-content-muted shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-content-primary truncate">
+                      {att.name}
+                    </p>
+                    <p className="text-[10px] text-content-muted">
+                      {formatSize(att.size)}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleRemove(idx)}
+                    className={cn(
+                      'shrink-0 p-0.5 rounded-md transition-colors',
+                      'opacity-0 group-hover:opacity-100',
+                      'hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-500'
+                    )}
+                    aria-label="移除文件"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
 
           {uploading.map((u) => (
             <div
@@ -238,7 +265,7 @@ export function FileUpload({ attachments, onAttachmentsChange, disabled }: FileU
             'disabled:opacity-50 disabled:cursor-not-allowed'
           )}
           aria-label="添加附件"
-          title="添加附件 (图片、PDF、文本文件, 最大10MB)"
+          title="添加附件 (图片、文本文件, 最大10MB)"
         >
           <Paperclip className="w-3.5 h-3.5" />
         </button>

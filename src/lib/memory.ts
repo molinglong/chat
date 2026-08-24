@@ -48,40 +48,55 @@ function toBigrams(text: string): Set<string> {
 }
 
 /**
- * 记忆与当前用户消息的相关度评分：
- * bigram 重叠率 + 最近更新时间加权
- */
-function scoreMemory(content: string, query: string, updatedAt: Date): number {
-  const a = toBigrams(content)
-  const b = toBigrams(query)
-  if (!a.size || !b.size) return 0
-  let overlap = 0
-  b.forEach((g) => {
-    if (a.has(g)) overlap++
-  })
-  const overlapRatio = overlap / b.size
-  // 30 天内更新的记忆获得最高 0.3 的新鲜度加分
-  const ageDays = (Date.now() - updatedAt.getTime()) / (1000 * 60 * 60 * 24)
-  const recency = Math.max(0, 1 - ageDays / 30) * 0.3
-  return overlapRatio + recency
-}
-
-/**
- * 按相关度排序取前 N 条记忆；手动添加的记忆额外加权优先注入
+ * 选择注入系统提示词的记忆（控制每次请求的固定 token 开销）：
+ * - 身份信息(user_info)与手动添加的记忆始终注入
+ * - 其余记忆仅在内容与当前消息有实际相关度(bigram 命中)时注入
+ * - 没有命中时用最近更新的少量记忆兜底,避免宽泛消息完全失去上下文
  */
 export function getRelevantMemories(
   memories: Memory[],
   userText: string,
   limit = 10
 ): Memory[] {
-  if (memories.length <= limit) return memories
-  const scored = memories.map((m) => {
-    let score = scoreMemory(m.content, userText, m.updatedAt)
-    if (m.source === "manual") score += 1 // 手动添加的记忆始终优先
-    return { m, score }
-  })
-  scored.sort((x, y) => y.score - x.score)
-  return scored.slice(0, limit).map((x) => x.m)
+  if (memories.length === 0) return []
+
+  const isAlways = (m: Memory) => m.source === "manual" || m.category === "user_info"
+  const always = memories.filter(isAlways)
+  const rest = memories.filter((m) => !isAlways(m))
+
+  // 与当前消息的实际相关度：bigram 命中率
+  // （不再加新鲜度加分，否则闲聊如"你好"也会注入全部记忆）
+  const queryBigrams = toBigrams(userText || "")
+  const overlapRatio = (content: string): number => {
+    if (!queryBigrams.size) return 0
+    const a = toBigrams(content)
+    if (!a.size) return 0
+    let overlap = 0
+    queryBigrams.forEach((g) => {
+      if (a.has(g)) overlap++
+    })
+    return overlap / queryBigrams.size
+  }
+
+  const quota = Math.max(0, limit - always.length)
+  const matched = rest
+    .map((m) => ({ m, r: overlapRatio(m.content) }))
+    .filter((x) => x.r > 0)
+    .sort((a, b) => b.r - a.r || b.m.updatedAt.getTime() - a.m.updatedAt.getTime())
+    .slice(0, quota)
+    .map((x) => x.m)
+
+  // 兜底：没有命中时保留最近更新的 3 条
+  const fill = quota - matched.length
+  const recent =
+    fill > 0
+      ? rest
+          .filter((m) => !matched.includes(m))
+          .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+          .slice(0, Math.min(3, fill))
+      : []
+
+  return [...always, ...matched, ...recent]
 }
 
 /** 合法的记忆类别 */
@@ -268,6 +283,8 @@ export async function extractAndSaveMemories(options: {
   const { userId, model, userText, assistantText } = options
   try {
     if (!userText.trim() || !assistantText.trim()) return
+    // 极短消息(如"你好""Hi")几乎不会产生新记忆,跳过提取以省去一次后台 LLM 调用的 token 开销
+    if (userText.trim().length < 4) return
 
     const existing = await prisma.memory.findMany({
       where: { userId },

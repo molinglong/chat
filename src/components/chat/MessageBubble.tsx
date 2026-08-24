@@ -1,11 +1,21 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect, KeyboardEvent } from 'react'
-import { Bot, Copy, Check, RotateCw, Pencil, X, ChevronDown, Brain } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Bot, Copy, Check, RotateCw, Pencil, X, ChevronDown, Brain, FileText } from 'lucide-react'
+import { cn, splitReasoningTail } from '@/lib/utils'
 import { useTypewriter } from '@/lib/useTypewriter'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import type { UIMessage } from 'ai'
+import type { Attachment } from '@/lib/attachment-types'
+
+/** UIMessage 上挂载的附件扩展字段(历史加载与发送后注入) */
+export type UIMessageWithAttachments = UIMessage & { attachments?: Attachment[] }
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
 
 interface MessageBubbleProps {
   message: UIMessage
@@ -31,7 +41,7 @@ export function MessageBubble({
   const [copied, setCopied] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState('')
-  const [showReasoning, setShowReasoning] = useState(false)
+  const [showReasoning, setShowReasoning] = useState(true)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Extract reasoning parts from message (for deep thinking / reasoning models)
@@ -40,6 +50,22 @@ export function MessageBubble({
   const lastReasoningPart = reasoningParts[reasoningParts.length - 1] as { state?: string } | undefined
   const isReasoningStreaming = isStreaming && isAssistant && lastReasoningPart?.state === 'streaming'
 
+  // Debug: log message structure for developer inspection
+  useEffect(() => {
+    if (isAssistant && typeof window !== 'undefined') {
+      console.log('[MessageBubble] Message parts:', {
+        totalParts: message.parts.length,
+        reasoningCount: reasoningParts.length,
+        reasoningTextLength: reasoningText.length,
+        textCount: message.parts.filter((p) => p.type === 'text').length,
+        allTypes: Array.from(new Set(message.parts.map((p) => p.type))),
+      })
+    }
+  }, [message.parts, reasoningText, isAssistant])
+
+  // 附件 (仅用户消息有)
+  const attachments = (message as UIMessageWithAttachments).attachments ?? []
+
   // Extract text from message parts
   const textParts = message.parts.filter((p) => p.type === 'text')
   const text = textParts.map((p) => p.text).join('')
@@ -47,24 +73,24 @@ export function MessageBubble({
   const isCurrentlyStreaming = isStreaming && isAssistant && lastPart?.state === 'streaming'
   const isWaitingForReasoning = isStreaming && isAssistant && !reasoningText && !text
 
-  // Auto-collapse reasoning when done, auto-expand when streaming starts
-  useEffect(() => {
-    if (isReasoningStreaming) {
-      setShowReasoning(true)
-    } else if (isCurrentlyStreaming && reasoningText) {
-      // Auto-collapse when text streaming starts
-      setShowReasoning(false)
-    }
-  }, [isReasoningStreaming, isCurrentlyStreaming, reasoningText])
+  // 兜底:模型偶发把全部内容(含最终答案)都放进 <think> 标签,导致正文为空。
+  // 此时从推理尾部拆出答案部分作为正文显示(流式期间不触发,避免误判)。
+  const needsBodyFallback = !isStreaming && !text.trim() && reasoningText.trim() !== ''
+  const bodySplit = needsBodyFallback ? splitReasoningTail(reasoningText) : null
+  const bodyText = bodySplit ? bodySplit.tail : text
+  const displayReasoningText = bodySplit ? bodySplit.head : reasoningText
+
+  // 思考过程默认展开(深度思考用户需要一眼看到推理),用户可手动折叠
+  // (不再自动折叠:流式结束后保持展开,避免两边对比时误以为没有思考)
 
   // Typewriter effect for assistant messages
-  const { displayText, isTyping } = useTypewriter(text, isAssistant)
+  const { displayText, isTyping } = useTypewriter(bodyText, isAssistant)
 
   // Show cursor while AI is streaming OR typewriter is still catching up
   const showCursor = isCurrentlyStreaming || isTyping
 
   // Show actions only when message is fully rendered (not streaming, not typing, not reasoning)
-  const showActions = isStreaming !== undefined && !isCurrentlyStreaming && !isTyping && !isReasoningStreaming && text.length > 0
+  const showActions = isStreaming !== undefined && !isCurrentlyStreaming && !isTyping && !isReasoningStreaming && bodyText.length > 0
 
   // Auto-focus and select when entering edit mode
   useEffect(() => {
@@ -110,11 +136,11 @@ export function MessageBubble({
   }, [commitEdit, cancelEditing])
 
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(text).then(() => {
+    navigator.clipboard.writeText(bodyText).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
-  }, [text])
+  }, [bodyText])
 
   // Edit mode: inline textarea for user messages
   if (isUser && isEditing) {
@@ -175,7 +201,7 @@ export function MessageBubble({
         {isAssistant ? (
           <>
             {/* Reasoning / deep thinking section */}
-            {reasoningText && (
+            {displayReasoningText && (
               <div className="mb-2">
                 <button
                   onClick={() => setShowReasoning(!showReasoning)}
@@ -188,7 +214,7 @@ export function MessageBubble({
                 {showReasoning && (
                   <div className="mt-1.5 pl-3 border-l-2 border-line-strong/60">
                     <p className="text-xs text-content-secondary whitespace-pre-wrap break-words leading-relaxed">
-                      {reasoningText}
+                      {displayReasoningText}
                       {isReasoningStreaming && (
                         <span className="inline-block w-1 h-3 ml-0.5 bg-accent animate-pulse align-middle" />
                       )}
@@ -219,8 +245,49 @@ export function MessageBubble({
             ) : null}
           </>
         ) : (
-          <div className="rounded-lg bg-accent px-3 py-1.5 rounded-br-sm">
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-accent-foreground">{text}</p>
+          <div className="flex flex-col items-end gap-1.5">
+            {/* 附件展示:图片缩略图(点击看大图) / 文件卡片 */}
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap justify-end gap-2">
+                {attachments.map((att, idx) =>
+                  att.type.startsWith('image/') ? (
+                    <a
+                      key={idx}
+                      href={att.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={att.name}
+                      className="block overflow-hidden rounded-lg border border-line hover:opacity-90 transition-opacity"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={att.url}
+                        alt={att.name}
+                        className="max-h-40 max-w-[220px] object-contain bg-surface-muted"
+                      />
+                    </a>
+                  ) : (
+                    <a
+                      key={idx}
+                      href={att.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={att.name}
+                      className="flex items-center gap-1.5 rounded-lg border border-line bg-surface-muted px-2 py-1.5 max-w-[180px] hover:bg-surface-subtle transition-colors"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-content-secondary shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs text-content-primary truncate">{att.name}</p>
+                        <p className="text-[10px] text-content-muted">{formatSize(att.size)}</p>
+                      </div>
+                    </a>
+                  )
+                )}
+              </div>
+            )}
+            <div className="rounded-lg bg-accent px-3 py-1.5 rounded-br-sm">
+              <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-accent-foreground">{text}</p>
+            </div>
           </div>
         )}
 

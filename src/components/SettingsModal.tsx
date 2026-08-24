@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { Save, Trash2, Loader2, CheckCircle, AlertCircle, Key, Eye, EyeOff, Zap, ExternalLink, Brain, Plus, Settings2, HelpCircle, Info, MessageSquare, GitBranch } from 'lucide-react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
+import { Save, Trash2, Loader2, CheckCircle, AlertCircle, Key, Eye, EyeOff, Zap, ExternalLink, Brain, Plus, Settings2, HelpCircle, Info, MessageSquare, GitBranch, Cpu, Wrench, BarChart3, ChevronUp, ChevronDown, Filter } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatStore } from '@/store/chat-store'
 
@@ -23,6 +23,65 @@ interface MemoryInfo {
   category: string
   content: string
   source: string
+  updatedAt: string
+}
+
+interface UsageStats {
+  totals: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+    messages: number
+  }
+  byModel: {
+    model: string
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+    messages: number
+  }[]
+  byDay: { date: string; totalTokens: number }[]
+}
+
+// Custom model types
+const CUSTOM_MODEL_PRESETS = [
+  { name: 'OpenRouter', baseURL: 'https://openrouter.ai/api/v1' },
+  { name: 'SiliconFlow', baseURL: 'https://api.siliconflow.cn/v1' },
+  { name: 'Ollama 本地', baseURL: 'http://localhost:11434/v1' },
+  { name: 'LM Studio', baseURL: 'http://localhost:1234/v1' },
+  { name: 'vLLM', baseURL: 'http://localhost:8000/v1' },
+] as const
+
+// 自定义模型小圆点颜色 (与 ModelSelector 保持一致)
+const CUSTOM_MODEL_DOT = 'bg-gray-400'
+
+interface CustomModelForm {
+  id?: string | null // editing existing
+  name: string
+  modelId: string
+  baseURL: string
+  keySource: 'own' | 'provider' | 'none'
+  apiKey: string
+  provider?: string // for keySource='provider'
+  contextWindow: number
+  supportsVision: boolean
+  supportsFiles: boolean
+  supportsReasoning: boolean
+}
+
+interface SavedCustomModel {
+  id: string // custom:xxx (ModelSelector 用)
+  dbId: string // 数据库真实 id (编辑/删除用)
+  hasApiKey: boolean
+  keySource: 'own' | 'provider' | 'none'
+  providerKey?: string | null
+  name: string
+  modelId: string
+  baseURL: string
+  contextWindow: number
+  supportsVision: boolean
+  supportsFiles: boolean
+  supportsReasoning: boolean
   updatedAt: string
 }
 
@@ -53,7 +112,7 @@ const PROVIDER_URL: Record<string, string> = {
   yi: 'https://platform.lingyiwanwu.com/apikeys',
 }
 
-type SectionId = 'providers' | 'memory' | 'general' | 'help' | 'about'
+type SectionId = 'providers' | 'memory' | 'general' | 'help' | 'about' | 'customModels' | 'usage'
 
 type ThemeChoice = 'light' | 'dark' | 'system'
 
@@ -66,6 +125,8 @@ const THEME_OPTIONS: { value: ThemeChoice; label: string }[] = [
 const NAV_ITEMS: { id: SectionId; label: string; icon: typeof Key }[] = [
   { id: 'providers', label: '服务商', icon: Key },
   { id: 'memory', label: '记忆', icon: Brain },
+  { id: 'customModels', label: '自定义模型', icon: Cpu },
+  { id: 'usage', label: '用量统计', icon: BarChart3 },
   { id: 'general', label: '通用', icon: Settings2 },
   { id: 'help', label: '帮助', icon: HelpCircle },
   { id: 'about', label: '关于', icon: Info },
@@ -90,6 +151,35 @@ export function SettingsModal() {
   const [activeSection, setActiveSection] = useState<SectionId>('providers')
   const [themeChoice, setThemeChoice] = useState<ThemeChoice>('system')
 
+  // Custom model state
+  const [customModels, setCustomModels] = useState<SavedCustomModel[]>([])
+  const [cmForm, setCmForm] = useState<CustomModelForm>({
+    id: null,
+    name: '',
+    modelId: '',
+    baseURL: 'https://',
+    keySource: 'own',
+    apiKey: '',
+    provider: '',
+    contextWindow: 32768,
+    supportsVision: false,
+    supportsFiles: false,
+    supportsReasoning: false,
+  })
+  const [cmSaving, setCmSaving] = useState(false)
+  const [cmTesting, setCmTesting] = useState<string | null>(null)
+  const [cmTestResult, setCmTestResult] = useState<{ [id: string]: 'success' | 'error' }>({})
+  const [cmDeleting, setCmDeleting] = useState<string | null>(null)
+  const [cmFormResult, setCmFormResult] = useState<'success' | 'error' | null>(null)
+
+  // Usage stats state
+  const [usageStats, setUsageStats] = useState<UsageStats | null>(null)
+
+  // Provider section collapse states and display filter
+  const [configuredCollapsed, setConfiguredCollapsed] = useState(false)
+  const [unconfiguredCollapsed, setUnconfiguredCollapsed] = useState(true)
+  const [showOnlyConfigured, setShowOnlyConfigured] = useState(true)
+
   // Fetch data when modal opens
   useEffect(() => {
     if (!settingsOpen) return
@@ -98,12 +188,24 @@ export function SettingsModal() {
       fetch('/api/providers').then((r) => r.json()),
       fetch('/api/keys').then((r) => r.json()),
       fetch('/api/memories').then((r) => r.json()),
+      fetch('/api/custom-models').then((r) => r.json()),
+      fetch('/api/usage').then((r) => r.json()).catch(() => null),
     ])
-      .then(([provs, keyList, memoryData]) => {
+      .then(([provs, keyList, memoryData, cmList, usageData]) => {
         setProviders(provs)
         setKeys(keyList)
         setMemories(memoryData?.memories ?? [])
         setMemoryEnabled(memoryData?.memoryEnabled ?? true)
+        setUsageStats(usageData?.totals ? usageData : null)
+        // Parse custom models: assume cmList is already ModelDefinition format from API
+        if (Array.isArray(cmList)) {
+          setCustomModels(
+            cmList.map((m: any) => ({
+              ...m,
+              updatedAt: new Date().toISOString(),
+            } as SavedCustomModel))
+          )
+        }
       })
       .catch(() => setMessage({ type: 'error', text: '加载数据失败' }))
       .finally(() => setLoading(false))
@@ -141,6 +243,19 @@ export function SettingsModal() {
     (providerId: string) => keys.find((k) => k.provider === providerId),
     [keys]
   )
+
+  // Sort configured providers by update time (newest first)
+  const sortedConfigured = useMemo(() => {
+    const conf = providers.filter((p) => keys.some((k) => k.provider === p.id))
+    return conf.sort((a, b) => {
+      const keyA = keys.find((k) => k.provider === a.id)
+      const keyB = keys.find((k) => k.provider === b.id)
+      if (!keyA && !keyB) return 0
+      if (!keyA) return 1
+      if (!keyB) return -1
+      return new Date(keyB.updatedAt).getTime() - new Date(keyA.updatedAt).getTime()
+    })
+  }, [providers, keys])
 
   async function handleSave(providerId: string) {
     const value = draftKeys[providerId]?.trim()
@@ -263,10 +378,129 @@ export function SettingsModal() {
     }
   }
 
+  // Custom model handlers
+  function applyPreset(preset: typeof CUSTOM_MODEL_PRESETS[number]) {
+    setCmForm((f) => ({ ...f, baseURL: preset.baseURL }))
+  }
+
+  async function handleCmSave() {
+    const { name, modelId, baseURL } = cmForm
+    // 'https://' 是占位默认值，视为未填
+    const cleanBaseURL = baseURL && baseURL.trim() !== 'https://' ? baseURL.trim() : ''
+    if (!name || !modelId) {
+      setMessage({ type: 'error', text: '名称和模型 ID 是必填项' })
+      return
+    }
+    if (cmForm.keySource === 'provider' && !cmForm.provider) {
+      setMessage({ type: 'error', text: '请选择要复用的服务商' })
+      return
+    }
+    if (cmForm.keySource !== 'provider' && !cleanBaseURL) {
+      setMessage({ type: 'error', text: 'Base URL 是必填项（复用服务商 Key 时可留空）' })
+      return
+    }
+    setCmSaving(true)
+    try {
+      const body = {
+        ...cmForm,
+        baseURL: cleanBaseURL,
+        keyProvider: cmForm.keySource === 'provider' ? cmForm.provider : undefined,
+        apiKey: cmForm.keySource === 'own' ? cmForm.apiKey : '',
+      }
+      const res = await fetch('/api/custom-models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) throw new Error('保存失败')
+      const data = await res.json()
+      setCustomModels((prev) => (
+        cmForm.id ? prev.map((m) => (m.dbId === cmForm.id ? { ...data, updatedAt: new Date().toISOString() } as SavedCustomModel : m)) : [...prev, { ...data, updatedAt: new Date().toISOString() } as SavedCustomModel]
+      ))
+      setCmForm({ id: null, name: '', modelId: '', baseURL: 'https://', keySource: 'own', apiKey: '', provider: '', contextWindow: 32768, supportsVision: false, supportsFiles: false, supportsReasoning: false })
+      setCmFormResult(null)
+      setMessage({ type: 'success', text: '自定义模型已保存' })
+    } catch (err) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : '保存失败' })
+    } finally {
+      setCmSaving(false)
+    }
+  }
+
+  async function handleCmDelete(dbId: string) {
+    if (!confirm('确定要删除此自定义模型吗？')) return
+    setCmDeleting(dbId)
+    try {
+      await fetch(`/api/custom-models/${dbId}`, { method: 'DELETE' })
+      setCustomModels((prev) => prev.filter((m) => m.dbId !== dbId))
+      setMessage({ type: 'success', text: '模型已删除' })
+      if (cmForm.id === dbId) {
+        setCmForm({ id: null, name: '', modelId: '', baseURL: 'https://', keySource: 'own', apiKey: '', provider: '', contextWindow: 32768, supportsVision: false, supportsFiles: false, supportsReasoning: false })
+        setCmFormResult(null)
+      }
+    } catch {
+      setMessage({ type: 'error', text: '删除失败' })
+    } finally {
+      setCmDeleting(null)
+    }
+  }
+
+  async function handleCmTest(id?: string) {
+    const targetId = id || `${Date.now()}` // temp id for testing draft
+    setCmTesting(targetId)
+    setCmFormResult(null)
+    setCmTestResult((r) => {
+      const next = { ...r }
+      delete next[targetId]
+      return next
+    })
+    try {
+      const body = id ? { id } : {
+        ...cmForm,
+        keyProvider: cmForm.keySource === 'provider' ? cmForm.provider : undefined,
+        apiKey: cmForm.keySource === 'own' ? cmForm.apiKey : '',
+      }
+      const res = await fetch('/api/custom-models/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const json = await res.json()
+      if (json.ok) {
+        setCmTestResult((r) => ({ ...r, [targetId]: 'success' }))
+        setCmFormResult('success')
+      } else {
+        setCmTestResult((r) => ({ ...r, [targetId]: 'error' }))
+        setCmFormResult('error')
+      }
+    } catch {
+      setCmTestResult((r) => ({ ...r, [targetId]: 'error' }))
+      setCmFormResult('error')
+    } finally {
+      setCmTesting(null)
+    }
+  }
+
+  function startEdit(model: SavedCustomModel) {
+    setCmForm({
+      id: model.dbId,
+      name: model.name,
+      modelId: model.modelId,
+      baseURL: model.baseURL,
+      keySource: model.keySource,
+      apiKey: '',
+      provider: model.providerKey || '',
+      contextWindow: model.contextWindow,
+      supportsVision: model.supportsVision,
+      supportsFiles: model.supportsFiles,
+      supportsReasoning: model.supportsReasoning,
+    })
+    setCmFormResult(null)
+  }
+
   if (!settingsOpen) return null
 
   const configured = providers.filter((p) => keys.some((k) => k.provider === p.id))
   const unconfigured = providers.filter((p) => !keys.some((k) => k.provider === p.id))
+  
+  // Use the pre-calculated sorted configured list
+  const sortedConfiguredList = sortedConfigured
 
   const sectionTitle = NAV_ITEMS.find((i) => i.id === activeSection)?.label
 
@@ -289,7 +523,7 @@ export function SettingsModal() {
           existingKey && 'bg-surface-muted/80'
         )}
       >
-        {/* Header: dot + name + status badge */}
+        {/* Header: dot + name + status badge + date */}
         <div className="flex items-center gap-2.5">
           <div className={cn(
             'w-2 h-2 rounded-full shrink-0',
@@ -305,6 +539,11 @@ export function SettingsModal() {
           ) : (
             <span className="text-[11px] text-content-muted shrink-0">
               {provider.models.length} 个模型
+            </span>
+          )}
+          {existingKey && (
+            <span className="text-[10px] text-content-muted shrink-0 whitespace-nowrap">
+              {new Date(existingKey.updatedAt).toLocaleDateString('zh-CN').replace(/年/g, '-').replace(/月/g, '-')}
             </span>
           )}
         </div>
@@ -506,27 +745,481 @@ export function SettingsModal() {
                 {/* 服务商 */}
                 {activeSection === 'providers' && (
                   <div className="space-y-3">
-                    {configured.length > 0 && (
-                      <div className="space-y-1.5">
-                        <div className="flex items-center gap-1.5 px-0.5">
-                          <span className="text-[11px] font-medium text-content-secondary">已配置</span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-mono">
-                            {configured.length}
-                          </span>
-                        </div>
-                        {configured.map(renderProviderCard)}
+                    {/* Filter button to show only configured providers */}
+                    {configured.length > 0 && unconfigured.length > 0 && (
+                      <div className="flex items-center justify-end gap-2 pr-0.5">
+                        <button
+                          onClick={() => setShowOnlyConfigured(!showOnlyConfigured)}
+                          className={cn(
+                            'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors',
+                            showOnlyConfigured
+                              ? 'bg-accent text-accent-foreground'
+                              : 'bg-surface-muted text-content-secondary hover:bg-surface-subtle'
+                          )}
+                        >
+                          <Filter className="w-3 h-3" />
+                          {showOnlyConfigured ? '显示全部' : '仅已配置'}
+                        </button>
                       </div>
                     )}
-                    {unconfigured.length > 0 && (
+
+                    {/* Configured providers section */}
+                    {(showOnlyConfigured ? configured : [...configured, ...unconfigured]).length > 0 && (
                       <div className="space-y-1.5">
-                        <div className="flex items-center gap-1.5 px-0.5">
-                          <span className="text-[11px] font-medium text-content-secondary">待配置</span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface-subtle/80 text-content-muted font-mono">
-                            {unconfigured.length}
-                          </span>
-                        </div>
-                        {unconfigured.map(renderProviderCard)}
+                        <button
+                          onClick={() => setConfiguredCollapsed(!configuredCollapsed)}
+                          className={cn(
+                            'flex items-center gap-1.5 w-full px-0.5 py-1 rounded-lg transition-colors',
+                            configuredCollapsed ? 'hover:bg-surface-subtle/60' : ''
+                          )}
+                        >
+                          <div className="flex items-center gap-1.5 flex-1">
+                            <span className="text-[11px] font-medium text-content-secondary">已配置</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-mono shrink-0">
+                              {configured.length}
+                            </span>
+                          </div>
+                          {configuredCollapsed ? (
+                            <ChevronDown className="w-3.5 h-3.5 text-content-muted shrink-0" />
+                          ) : (
+                            <ChevronUp className="w-3.5 h-3.5 text-content-muted shrink-0" />
+                          )}
+                        </button>
+
+                        {!configuredCollapsed && (
+                          <div className="space-y-2 mt-2">
+                            {sortedConfiguredList.map((provider) => (
+                              <div key={provider.id} className="animate-in fade-in slide-in-from-top-2 duration-300">
+                                {renderProviderCard(provider)}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
+                    )}
+
+                    {/* Unconfigured providers section */}
+                    {!showOnlyConfigured && unconfigured.length > 0 && (
+                      <div className="space-y-1.5">
+                        <button
+                          onClick={() => setUnconfiguredCollapsed(!unconfiguredCollapsed)}
+                          className={cn(
+                            'flex items-center gap-1.5 w-full px-0.5 py-1 rounded-lg transition-colors',
+                            unconfiguredCollapsed ? 'hover:bg-surface-subtle/60' : ''
+                          )}
+                        >
+                          <div className="flex items-center gap-1.5 flex-1">
+                            <span className="text-[11px] font-medium text-content-secondary">待配置</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface-subtle/80 text-content-muted font-mono shrink-0">
+                              {unconfigured.length}
+                            </span>
+                          </div>
+                          {unconfiguredCollapsed ? (
+                            <ChevronDown className="w-3.5 h-3.5 text-content-muted shrink-0" />
+                          ) : (
+                            <ChevronUp className="w-3.5 h-3.5 text-content-muted shrink-0" />
+                          )}
+                        </button>
+
+                        {!unconfiguredCollapsed && (
+                          <div className="space-y-2 mt-2">
+                            {unconfigured.map((provider) => (
+                              <div key={provider.id} className="animate-in fade-in slide-in-from-top-2 duration-300">
+                                {renderProviderCard(provider)}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 自定义模型 */}
+                {activeSection === 'customModels' && (
+                  <div className="space-y-3">
+                    {/* Form for add/edit */}
+                    <div className="rounded-xl border border-line/60 bg-surface/60 px-3.5 py-3 space-y-2.5">
+                      <h4 className="text-sm font-semibold text-content-primary">{cmForm.id ? '编辑自定义模型' : '添加自定义模型'}</h4>
+                      
+                      {/* Presets */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {CUSTOM_MODEL_PRESETS.map((preset) => (
+                          <button
+                            key={preset.name}
+                            onClick={() => applyPreset(preset)}
+                            className="px-2.5 py-1 rounded-lg text-[11px] bg-surface-muted text-content-secondary hover:bg-surface-subtle transition-colors"
+                          >
+                            {preset.name}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Name & model id */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={cmForm.name}
+                          onChange={(e) => setCmForm({ ...cmForm, name: e.target.value })}
+                          placeholder="显示名称 (如：我的 DeepSeek)"
+                          className="w-full rounded-lg border border-line/60 bg-surface px-2.5 py-1.5 text-xs text-content-primary placeholder:text-content-muted focus:outline-none focus:ring-2 focus:ring-line-strong/30"
+                        />
+                        <input
+                          type="text"
+                          value={cmForm.modelId}
+                          onChange={(e) => setCmForm({ ...cmForm, modelId: e.target.value })}
+                          placeholder="模型 ID (如：deepseek-chat)"
+                          className="w-full rounded-lg border border-line/60 bg-surface px-2.5 py-1.5 text-xs text-content-primary placeholder:text-content-muted focus:outline-none focus:ring-2 focus:ring-line-strong/30"
+                        />
+                      </div>
+
+                      {/* 重复模型提示 */}
+                      {(() => {
+                        const mid = cmForm.modelId.trim()
+                        const pid = cmForm.keySource === 'provider' ? cmForm.provider : ''
+                        const builtinHit = !!(pid && mid && providers.find(p => p.id === pid)?.models.includes(mid))
+                        const ownHit = !!(mid && customModels.some(m => m.modelId === mid && (!cmForm.id || m.dbId !== cmForm.id)))
+                        if (builtinHit) return (
+                          <p className="text-[10px] text-amber-600 dark:text-amber-400 text-left flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" /> 该模型 ID 已在内置列表中，通常无需重复添加
+                          </p>
+                        )
+                        if (ownHit) return (
+                          <p className="text-[10px] text-amber-600 dark:text-amber-400 text-left flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" /> 已存在相同模型 ID 的自定义模型，保存会失败
+                          </p>
+                        )
+                        return null
+                      })()}
+
+                      {/* Base URL */}
+                      <div className="space-y-1">
+                        <input
+                          type="text"
+                          value={cmForm.baseURL}
+                          onChange={(e) => setCmForm({ ...cmForm, baseURL: e.target.value })}
+                          placeholder={cmForm.keySource === 'provider'
+                            ? 'Base URL (可选：留空使用服务商官方接口)'
+                            : 'Base URL (OpenAI 兼容，如：https://api.siliconflow.cn/v1)'}
+                          className="w-full rounded-lg border border-line/60 bg-surface px-2.5 py-1.5 text-xs text-content-primary placeholder:text-content-muted focus:outline-none focus:ring-2 focus:ring-line-strong/30"
+                        />
+                        {cmForm.keySource === 'provider' && (
+                          <p className="text-[10px] text-content-muted text-left">
+                            留空将直接调用所选服务商官方接口（适合添加该服务商未内置的新模型）；也可填写代理或网关地址覆盖。
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Key source selector */}
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={cmForm.keySource}
+                          onChange={(e) => {
+                            const v = e.target.value as 'own' | 'provider' | 'none'
+                            setCmForm({
+                              ...cmForm,
+                              keySource: v,
+                              // 复用服务商时清空 Base URL（留空走服务商原生接口）
+                              baseURL: v === 'provider' ? '' : (cmForm.baseURL || 'https://'),
+                            })
+                          }}
+                          className="flex-1 rounded-lg border border-line/60 bg-surface px-2.5 py-1.5 text-xs text-content-primary focus:outline-none focus:ring-2 focus:ring-line-strong/30"
+                        >
+                          <option value="own">使用独立 API Key</option>
+                          <option value="provider">复用已有服务商 Key</option>
+                          <option value="none">无需鉴权 (本地)</option>
+                        </select>
+                      </div>
+
+                      {/* Conditional key fields */}
+                      {(cmForm.keySource === 'own' || cmForm.keySource === 'provider') && (
+                        <div className="space-y-1.5">
+                          {cmForm.keySource === 'own' && (
+                            <input
+                              type="password"
+                              value={cmForm.apiKey}
+                              onChange={(e) => setCmForm({ ...cmForm, apiKey: e.target.value })}
+                              placeholder="API Key"
+                              className="w-full rounded-lg border border-line/60 bg-surface px-2.5 py-1.5 text-xs text-content-primary placeholder:text-content-muted focus:outline-none focus:ring-2 focus:ring-line-strong/30"
+                            />
+                          )}
+                          {cmForm.keySource === 'provider' && (
+                            <select
+                              value={cmForm.provider || ''}
+                              onChange={(e) => setCmForm({ ...cmForm, provider: e.target.value })}
+                              className="w-full rounded-lg border border-line/60 bg-surface px-2.5 py-1.5 text-xs text-content-primary focus:outline-none focus:ring-2 focus:ring-line-strong/30"
+                            >
+                              <option value="">选择服务商...</option>
+                              {keys.map((k) => (
+                                <option key={k.provider} value={k.provider}>{k.provider}</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Context window */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-content-secondary shrink-0">上下文窗口</span>
+                        <input
+                          type="number"
+                          value={cmForm.contextWindow}
+                          onChange={(e) => setCmForm({ ...cmForm, contextWindow: Number(e.target.value) })}
+                          className="flex-1 rounded-lg border border-line/60 bg-surface px-2.5 py-1.5 text-xs text-content-primary focus:outline-none focus:ring-2 focus:ring-line-strong/30"
+                        />
+                      </div>
+
+                      {/* Toggles */}
+                      <div className="grid grid-cols-3 gap-1.5 pt-1">
+                        <label className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface-muted text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={cmForm.supportsVision}
+                            onChange={(e) => setCmForm({ ...cmForm, supportsVision: e.target.checked })}
+                            className="accent-accent"
+                          />
+                          <span>支持视觉</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface-muted text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={cmForm.supportsFiles}
+                            onChange={(e) => setCmForm({ ...cmForm, supportsFiles: e.target.checked })}
+                            className="accent-accent"
+                          />
+                          <span>支持文件</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface-muted text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={cmForm.supportsReasoning}
+                            onChange={(e) => setCmForm({ ...cmForm, supportsReasoning: e.target.checked })}
+                            className="accent-accent"
+                          />
+                          <span>支持推理</span>
+                        </label>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleCmTest(cmForm.id || undefined)}
+                          disabled={cmTesting !== null}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-muted text-content-secondary hover:bg-surface-subtle transition-colors shrink-0"
+                        >
+                          {cmTesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                          {cmForm.id ? '测试连接' : '保存前测试'}
+                        </button>
+                        {cmFormResult === 'success' && <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />}
+                        {cmFormResult === 'error' && <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />}
+                        <button
+                          onClick={handleCmSave}
+                          disabled={cmSaving || cmForm.keySource === 'own' && !cmForm.apiKey}
+                          className={cn(
+                            'px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 shrink-0',
+                            !(cmSaving || (cmForm.keySource === 'own' && !cmForm.apiKey))
+                              ? 'bg-accent text-accent-foreground hover:bg-accent-hover'
+                              : 'bg-surface-muted text-content-muted cursor-not-allowed'
+                          )}
+                        >
+                          {cmSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                          保存
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* List of existing models */}
+                    {customModels.length > 0 ? (
+                      <ul className="space-y-1.5">
+                        {customModels.map((model) => (
+                          <li
+                            key={model.id}
+                            className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-surface/60 border border-line/60"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className={cn('w-1.5 h-1.5 rounded-full', CUSTOM_MODEL_DOT)} />
+                              <div className="min-w-0">
+                                <p className="text-xs font-medium text-content-primary truncate">{model.name}</p>
+                                <p className="text-[11px] text-content-muted truncate">{model.modelId} @ {model.baseURL ? model.baseURL.replace(/^https?:\/\//, '') : (model.providerKey || '服务商官方接口')}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              {cmTestResult[model.dbId] === 'success' && <CheckCircle className="w-4 h-4 text-green-500" />}
+                              {cmTestResult[model.dbId] === 'error' && <AlertCircle className="w-4 h-4 text-red-500" />}
+                              <button
+                                onClick={() => startEdit(model)}
+                                className="p-1.5 rounded-lg text-content-muted hover:text-content-primary hover:bg-surface-subtle transition-colors"
+                              >
+                                <Wrench className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleCmDelete(model.dbId)}
+                                disabled={cmDeleting === model.dbId}
+                                className="p-1.5 rounded-lg text-red-500/70 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                              >
+                                {cmDeleting === model.dbId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-[11px] text-content-muted text-left py-1">
+                        暂无自定义模型。您可以添加 OpenAI 兼容端点（如 OpenRouter、SiliconFlow、Ollama 等）。
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* 用量统计 */}
+                {activeSection === 'usage' && (
+                  <div className="space-y-3">
+                    {!usageStats ? (
+                      <p className="text-[11px] text-content-muted text-left py-1">
+                        暂无统计数据。发起对话后，每次回复的 Token 消耗会自动记录在这里。
+                      </p>
+                    ) : (
+                      <>
+                        {/* 总览卡片 */}
+                        <div className="rounded-xl border border-line/60 bg-surface/60 px-3.5 py-3 space-y-2.5">
+                          <div className="flex items-end justify-between gap-3">
+                            <div className="text-left">
+                              <p className="text-[11px] text-content-muted">累计消耗 Token</p>
+                              <p className="text-xl font-semibold text-content-primary font-mono leading-tight">
+                                {usageStats.totals.totalTokens.toLocaleString()}
+                              </p>
+                            </div>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface-muted text-content-muted font-mono shrink-0 mb-0.5">
+                              {usageStats.totals.messages.toLocaleString()} 条回复
+                            </span>
+                          </div>
+                          {/* 输入/输出拆分条 */}
+                          <div className="space-y-1.5">
+                            {(() => {
+                              const t = usageStats.totals
+                              const pct = t.totalTokens > 0
+                                ? Math.round((t.promptTokens / t.totalTokens) * 100)
+                                : 0
+                              return (
+                                <>
+                                  <div className="h-1.5 rounded-full bg-surface-muted overflow-hidden flex">
+                                    <div
+                                      className="h-full bg-accent/70"
+                                      style={{ width: `${pct}%` }}
+                                      title={`输入 ${t.promptTokens.toLocaleString()}`}
+                                    />
+                                    <div
+                                      className="h-full bg-content-muted/40 flex-1"
+                                      title={`输出 ${t.completionTokens.toLocaleString()}`}
+                                    />
+                                  </div>
+                                  <div className="flex items-center justify-between text-[11px]">
+                                    <span className="text-content-secondary flex items-center gap-1.5">
+                                      <span className="w-2 h-2 rounded-full bg-accent/70 inline-block" />
+                                      输入 {t.promptTokens.toLocaleString()}
+                                    </span>
+                                    <span className="text-content-muted flex items-center gap-1.5">
+                                      <span className="w-2 h-2 rounded-full bg-content-muted/40 inline-block" />
+                                      输出 {t.completionTokens.toLocaleString()}
+                                    </span>
+                                  </div>
+                                </>
+                              )
+                            })()}
+                          </div>
+                        </div>
+
+                        {/* 最近 30 天柱状图 */}
+                        {usageStats.byDay.length > 0 && (
+                          <div className="rounded-xl border border-line/60 bg-surface/60 px-3.5 py-3">
+                            <p className="text-[11px] font-medium text-content-secondary mb-2 text-left">
+                              最近 30 天
+                            </p>
+                            {(() => {
+                              const max = Math.max(...usageStats.byDay.map((d) => d.totalTokens), 1)
+                              const sum30 = usageStats.byDay.reduce((s, d) => s + d.totalTokens, 0)
+                              return (
+                                <>
+                                  <div className="flex items-end gap-[3px] h-20">
+                                    {usageStats.byDay.map((d) => (
+                                      <div
+                                        key={d.date}
+                                        className="flex-1 flex items-end h-full group"
+                                        title={`${d.date.slice(5)} · ${d.totalTokens.toLocaleString()} tokens`}
+                                      >
+                                        <div
+                                          className={cn(
+                                            'w-full rounded-t-[3px] transition-colors',
+                                            d.totalTokens > 0
+                                              ? 'bg-accent/70 group-hover:bg-accent'
+                                              : 'bg-surface-subtle/60'
+                                          )}
+                                          style={{
+                                            height: d.totalTokens > 0
+                                              ? `${Math.max((d.totalTokens / max) * 100, 4)}%`
+                                              : '4px',
+                                          }}
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div className="flex items-center justify-between mt-1.5 text-[10px] text-content-muted font-mono">
+                                    <span>{usageStats.byDay[0].date.slice(5)}</span>
+                                    <span>{sum30.toLocaleString()} tokens</span>
+                                    <span>{usageStats.byDay[usageStats.byDay.length - 1].date.slice(5)}</span>
+                                  </div>
+                                </>
+                              )
+                            })()}
+                          </div>
+                        )}
+
+                        {/* 按模型统计 */}
+                        {usageStats.byModel.length > 0 && (
+                          <div className="rounded-xl border border-line/60 bg-surface/60 px-3.5 py-3">
+                            <p className="text-[11px] font-medium text-content-secondary mb-2 text-left">
+                              按模型
+                            </p>
+                            <ul className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
+                              {usageStats.byModel.map((m) => {
+                                const pct = usageStats.totals.totalTokens > 0
+                                  ? Math.round((m.totalTokens / usageStats.totals.totalTokens) * 100)
+                                  : 0
+                                return (
+                                  <li
+                                    key={m.model}
+                                    className="rounded-lg bg-surface-muted/60 border border-line/40 px-2.5 py-2"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-xs text-content-primary truncate">
+                                        {m.model}
+                                      </span>
+                                      <span className="text-xs font-mono text-content-secondary shrink-0">
+                                        {m.totalTokens.toLocaleString()}
+                                      </span>
+                                    </div>
+                                    <div className="mt-1.5 flex items-center gap-2">
+                                      <div className="flex-1 h-1 rounded-full bg-surface-subtle overflow-hidden">
+                                        <div
+                                          className="h-full rounded-full bg-accent/70"
+                                          style={{ width: `${pct}%` }}
+                                        />
+                                      </div>
+                                      <span className="text-[10px] text-content-muted font-mono shrink-0 w-9 text-right">
+                                        {pct}%
+                                      </span>
+                                    </div>
+                                    <div className="mt-1 flex items-center justify-between text-[10px] text-content-muted">
+                                      <span>输入 {m.promptTokens.toLocaleString()} · 输出 {m.completionTokens.toLocaleString()}</span>
+                                      <span>{m.messages} 条</span>
+                                    </div>
+                                  </li>
+                                )
+                              })}
+                            </ul>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
