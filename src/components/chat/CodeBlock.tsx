@@ -108,6 +108,7 @@ export function CodeBlock({ language, code, className, previewCode }: CodeBlockP
   const [copied, setCopied] = useState(false)
   const [highlighted, setHighlighted] = useState<string>('')
   const [isHighlighted, setIsHighlighted] = useState(false)
+  const setPreviewCode = useChatStore(state => state.setPreviewCode)
   const setIsFullscreen = useChatStore(state => state.setIsPreviewFullscreen)
 
   const handleCopy = useCallback(() => {
